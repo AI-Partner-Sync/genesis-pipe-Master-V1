@@ -1,0 +1,1240 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Genesis Pipe</title>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <style>
+      /* ── Design System: AI PARTNER SYNC ── */
+      :root {
+        --navy-950: #020817;
+        --navy-900: #0a0f1e;
+        --navy-800: #0d1526;
+        --navy-700: #111c35;
+        --navy-600: #162244;
+        --navy-500: #1e3a6e;
+        --gold-400: #f0c040;
+        --gold-500: #d4a017;
+        --gold-600: #b8860b;
+        --gold-glow: rgba(240,192,64,0.15);
+        --gold-glow-strong: rgba(240,192,64,0.35);
+        --glass-bg: rgba(13,21,38,0.65);
+        --glass-border: rgba(240,192,64,0.18);
+        --glass-blur: blur(16px);
+        --text-primary: #e8edf8;
+        --text-secondary: #8899bb;
+        --text-gold: #f0c040;
+      }
+
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        display: flex;
+        flex-direction: column;
+        height: 100vh;                       /* 最終フォールバック */
+        height: calc(var(--vh, 1vh) * 100); /* JSフォールバック（iOS 15.3以前） */
+        height: 100dvh;                      /* iOS 15.4+ / Android Chrome（上書き優先） */
+        background: var(--navy-950);
+        color: var(--text-primary);
+        overflow: hidden;
+      }
+
+      /* ── Synapse Canvas ── */
+      #synapse-canvas {
+        position: fixed;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 0;
+        opacity: 0.5;
+      }
+
+      /* ── Aurora Overlay ── */
+      #aurora-overlay {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        z-index: 1;
+        background: radial-gradient(ellipse 80% 40% at 50% 0%, rgba(30,58,110,0.45) 0%, transparent 70%);
+      }
+
+      /* ── Glassmorphism ── */
+      .glass {
+        background: var(--glass-bg);
+        backdrop-filter: var(--glass-blur);
+        -webkit-backdrop-filter: var(--glass-blur);
+        border: 1px solid var(--glass-border);
+      }
+
+      /* ── Header ── */
+      .header {
+        position: relative;
+        z-index: 10;
+        padding: 14px 18px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+      }
+
+      .title {
+        display: flex;
+        align-items: center;
+      }
+
+      /* ── ロゴ：ネオンなし、そのまま表示 ── */
+      .title-logo {
+        height: 34px;
+        width: auto;
+        display: block;
+      }
+
+      /* ── ロゴ画像がない場合のテキストフォールバック ── */
+      .title-logo-fallback {
+        display: none;
+        align-items: center;
+        gap: 6px;
+        font-size: 15px;
+        font-weight: 700;
+        color: var(--gold-400);
+        letter-spacing: 0.08em;
+      }
+
+      /* ── トグルラッパー：輪郭ライン走行 ── */
+      @property --ta {
+        syntax: '<angle>';
+        initial-value: 0deg;
+        inherits: false;
+      }
+      @keyframes toggle-border-spin {
+        to { --ta: 360deg; }
+      }
+      /* #toggle-wrap はシンプルなラッパーに戻す */
+      #toggle-wrap { display: flex; align-items: center; }
+
+      /* スイッチ枠だけに光ラインを走らせる */
+      #switch-border {
+        padding: 1.5px;
+        border-radius: 9999px;
+        background: conic-gradient(
+          from var(--ta),
+          rgba(240,192,64,0)    0%,
+          rgba(240,192,64,0)    38%,
+          rgba(255,250,160,1)   46%,
+          rgba(255,255,200,1)   50%,
+          rgba(255,250,160,1)   54%,
+          rgba(240,192,64,0)    62%,
+          rgba(240,192,64,0)   100%
+        );
+        animation: toggle-border-spin 6s linear infinite;
+        display: inline-flex;
+      }
+
+      .switch-container {
+        display: flex;
+        align-items: center;
+        font-size: 11px;
+        color: #ffffff;
+        gap: 8px;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        background: var(--glass-bg);
+        backdrop-filter: var(--glass-blur);
+        -webkit-backdrop-filter: var(--glass-blur);
+        border-radius: 9999px;
+        padding: 5px 10px;
+      }
+
+      /* ── スイッチ トグル ── */
+      .switch { position: relative; display: inline-block; width: 44px; height: 26px; }
+      .switch input { opacity: 0; width: 0; height: 0; }
+      .slider {
+        position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+        background: linear-gradient(180deg, rgba(30,30,60,0.8), rgba(10,10,30,0.9));
+        border: 1px solid rgba(255,255,255,0.12);
+        transition: .3s; border-radius: 34px;
+        box-shadow: inset 0 2px 4px rgba(0,0,0,0.6), inset 0 -1px 2px rgba(255,255,255,0.05);
+      }
+
+      /* 球体ノブ */
+      .slider:before {
+        position: absolute; content: ""; height: 20px; width: 20px;
+        left: 2px; bottom: 2px; border-radius: 50%;
+        background: radial-gradient(circle at 35% 32%,
+          rgba(255,255,255,0.95) 0%,
+          rgba(200,210,230,0.9)  28%,
+          rgba(140,155,185,0.85) 55%,
+          rgba(80,95,130,0.9)    80%,
+          rgba(40,55,90,1)       100%
+        );
+        box-shadow:
+          0 3px 6px rgba(0,0,0,0.7),
+          inset 0 1px 3px rgba(255,255,255,0.6),
+          inset 0 -1px 2px rgba(0,0,0,0.4);
+        transition: .3s;
+      }
+
+      input:checked + .slider {
+        background: linear-gradient(180deg, rgba(180,130,0,0.5), rgba(100,70,0,0.6));
+        border-color: rgba(240,192,64,0.3);
+        box-shadow: inset 0 2px 4px rgba(0,0,0,0.5), 0 0 8px rgba(240,192,64,0.2);
+      }
+      input:checked + .slider:before {
+        transform: translateX(18px);
+        background: radial-gradient(circle at 35% 32%,
+          rgba(255,255,220,1)    0%,
+          rgba(255,220,80,0.95)  30%,
+          rgba(240,160,20,0.9)   60%,
+          rgba(180,100,0,0.95)   85%,
+          rgba(120,60,0,1)       100%
+        );
+        box-shadow:
+          0 3px 8px rgba(0,0,0,0.6),
+          0 0 10px rgba(240,192,64,0.7),
+          inset 0 1px 3px rgba(255,255,200,0.8),
+          inset 0 -1px 2px rgba(100,50,0,0.5);
+      }
+
+      /* ── Chat Area ── */
+      #chat-area {
+        position: relative;
+        z-index: 10;
+        flex: 1;
+        overflow-y: auto;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+
+      #chat-area::-webkit-scrollbar { width: 4px; }
+      #chat-area::-webkit-scrollbar-track { background: var(--navy-900); }
+      #chat-area::-webkit-scrollbar-thumb { background: var(--navy-600); border-radius: 2px; }
+      #chat-area::-webkit-scrollbar-thumb:hover { background: var(--gold-600); }
+
+      /* ── Bubbles ── */
+      .bubble {
+        max-width: 85%; padding: 12px 16px; border-radius: 18px;
+        font-size: 14px; line-height: 1.65; word-wrap: break-word; letter-spacing: 0.02em;
+      }
+
+      .bubble.user {
+        align-self: flex-end;
+        background: rgba(30,58,138,0.5);
+        color: var(--text-primary);
+        border-bottom-right-radius: 4px;
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        box-shadow: 0 4px 16px rgba(30,58,138,0.3), inset 0 0 0 1px rgba(240,192,64,0.12);
+        border: 1px solid rgba(240,192,64,0.2);
+      }
+
+      .bubble.titan {
+        align-self: flex-start;
+        background: rgba(13,21,38,0.75);
+        color: var(--text-primary);
+        border-bottom-left-radius: 4px;
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+        border: 1px solid rgba(240,192,64,0.14);
+      }
+
+      .bubble.system {
+        align-self: center;
+        background: rgba(0,0,0,0.35);
+        color: #ffffff;
+        font-size: 11px;
+        padding: 5px 14px;
+        border-radius: 20px;
+        margin: 4px 0;
+        backdrop-filter: blur(8px);
+        border: 1px solid rgba(240,192,64,0.08);
+        letter-spacing: 0.04em;
+      }
+
+      /* ── Footer ── */
+      .footer {
+        position: relative;
+        z-index: 10;
+        padding: 12px 14px;
+        /* iOSホームインジケーター分の余白を確保 */
+        padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        border-top: 1px solid rgba(255,255,255,0.04);
+        flex-shrink: 0;
+      }
+
+      /* #save-btn は下部の @property ブロックで定義 */
+
+      /* Input row */
+      .input-row { display: flex; gap: 10px; align-items: flex-end; }
+
+      #text-input {
+        flex: 1; padding: 13px 16px; border-radius: 20px;
+        background: rgba(13,21,38,0.7);
+        border: 1px solid rgba(240,192,64,0.15);
+        color: var(--text-primary);
+        font-size: 15px; line-height: 1.5;
+        height: auto;
+        min-height: 50px;
+        max-height: 45vh;
+        overflow-y: auto;
+        resize: none; outline: none;
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        box-shadow: inset 0 2px 6px rgba(0,0,0,0.5);
+        transition: border-color 0.2s, height 0.15s ease;
+      }
+      #text-input:focus { border-color: rgba(240,192,64,0.35); }
+      #text-input::placeholder { color: var(--text-secondary); }
+
+      /* Icon buttons */
+      .icon-btn {
+        width: 48px; height: 48px; border-radius: 50%; border: none;
+        display: flex; justify-content: center; align-items: center;
+        cursor: pointer; transition: 0.2s; flex-shrink: 0;
+      }
+
+      #send-btn {
+        background: radial-gradient(circle at 36% 30%,
+          rgba(255,252,180,1)   0%,
+          rgba(255,220,60,0.95) 25%,
+          var(--gold-400)       48%,
+          var(--gold-500)       70%,
+          var(--gold-600)       88%,
+          rgba(90,50,0,1)       100%
+        );
+        color: var(--navy-950);
+        box-shadow:
+          0 5px 16px rgba(0,0,0,0.6),
+          0 2px 8px var(--gold-glow-strong),
+          inset 0 1px 4px rgba(255,255,200,0.7),
+          inset 0 -2px 4px rgba(0,0,0,0.35);
+        border: none;
+      }
+      #send-btn .material-icons { font-size: 20px; text-shadow: 0 1px 2px rgba(0,0,0,0.4); }
+      #send-btn:active {
+        transform: scale(0.92);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.5), inset 0 2px 5px rgba(0,0,0,0.3);
+      }
+      #send-btn:hover {
+        box-shadow: 0 6px 20px rgba(240,192,64,0.55), inset 0 1px 4px rgba(255,255,200,0.8), inset 0 -2px 4px rgba(0,0,0,0.3);
+      }
+
+      #mic-btn {
+        background: rgba(13,21,38,0.8);
+        color: var(--gold-400);
+        border: 1px solid var(--glass-border);
+        backdrop-filter: blur(8px);
+      }
+      #mic-btn.recording {
+        background: rgba(239,68,68,0.85);
+        color: white;
+        border-color: transparent;
+        animation: pulse-red 1.5s infinite;
+        box-shadow: 0 0 16px rgba(239,68,68,0.6);
+      }
+
+      @keyframes pulse-red {
+        0%   { box-shadow: 0 0 0 0 rgba(239,68,68,0.6); }
+        70%  { box-shadow: 0 0 0 14px rgba(239,68,68,0); }
+        100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
+      }
+
+      /* ── Typing dots ── */
+      .typing-indicator { display: flex; gap: 4px; padding: 5px; }
+      .dot {
+        width: 6px; height: 6px;
+        background: var(--gold-400);
+        border-radius: 50%;
+        animation: bounce 1.4s infinite ease-in-out both;
+      }
+      .dot:nth-child(1) { animation-delay: -0.32s; }
+      .dot:nth-child(2) { animation-delay: -0.16s; }
+
+      @keyframes bounce {
+        0%, 80%, 100% { transform: scale(0); opacity: 0.4; }
+        40%            { transform: scale(1);   opacity: 1; }
+      }
+
+      /* 旧 fixed 版 BGM Control は削除済み → 下部インライン版を使用 */
+
+      /* ── ① タイトル ネオン明滅（白グロウ・文字色はゴールドのまま） ── */
+      @keyframes neon-flicker {
+        0%,  8%,  10%, 45%, 48%, 100% {
+          color: var(--gold-400);
+          text-shadow:
+            0 0 3px rgba(255,255,255,1),
+            0 0 9px rgba(255,255,255,0.85),
+            0 0 20px rgba(255,255,255,0.5),
+            0 0 40px rgba(255,255,255,0.25);
+        }
+        4% {
+          color: var(--gold-400);
+          text-shadow: none;
+        }
+        6% {
+          color: var(--gold-400);
+          text-shadow: 0 0 5px rgba(255,255,255,0.5);
+        }
+        46% {
+          color: var(--gold-400);
+          text-shadow: none;
+        }
+      }
+
+      /* .title へのテキスト明滅は廃止。ロゴ画像側の logo-neon-flicker を使用 */
+
+      /* ── ② セーブボタン 輪郭ライト走行 (@property) ── */
+      @property --ba {
+        syntax: '<angle>';
+        initial-value: 0deg;
+        inherits: false;
+      }
+
+      @keyframes save-border-spin {
+        to { --ba: 360deg; }
+      }
+
+      #save-area {
+        flex: 1;
+        position: relative;
+        padding: 1.5px;
+        border-radius: 13px;
+        background: conic-gradient(
+          from var(--ba),
+          rgba(240,192,64,0)    0%,
+          rgba(240,192,64,0)    38%,
+          rgba(255,250,160,1)   46%,
+          rgba(255,255,200,1)   50%,
+          rgba(255,250,160,1)   54%,
+          rgba(240,192,64,0)    62%,
+          rgba(240,192,64,0)   100%
+        );
+        animation: save-border-spin 7s linear infinite;
+      }
+
+      #save-btn {
+        width: 100%; padding: 11px;
+        background: linear-gradient(135deg, rgba(22,34,68,0.92), rgba(13,21,38,0.96));
+        color: var(--text-primary);
+        border: none;
+        border-radius: 11.5px;
+        font-weight: 700;
+        font-size: 13px;
+        letter-spacing: 0.08em;
+        cursor: pointer;
+        display: flex; justify-content: center; align-items: center; gap: 6px;
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        transition: box-shadow 0.25s;
+      }
+      #save-btn:hover { box-shadow: 0 0 18px var(--gold-glow-strong); }
+      #save-btn:active { transform: scale(0.985); }
+
+      /* ── ③ BGM ＋ セーブ 横並び行 ── */
+      .save-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      /* ── ⚙️ 設定ボタン ── */
+      #settings-btn {
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        padding: 6px;
+        border-radius: 8px;
+        transition: color 0.2s, background 0.2s;
+        margin-right: 6px;
+      }
+      #settings-btn:hover {
+        color: var(--gold-400);
+        background: rgba(240,192,64,0.08);
+      }
+      #settings-btn .material-icons { font-size: 20px; }
+
+      /* ── ⚙️ 設定モーダル ── */
+      #settings-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.55);
+        z-index: 200;
+        justify-content: center;
+        align-items: center;
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
+      }
+      #settings-overlay.open { display: flex; }
+
+      #settings-modal {
+        background: var(--navy-800);
+        border: 1px solid var(--glass-border);
+        border-radius: 16px;
+        padding: 28px 24px 24px;
+        width: 340px;
+        max-width: 90vw;
+        box-shadow: 0 24px 64px rgba(0,0,0,0.7);
+      }
+      #settings-modal h3 {
+        margin: 0 0 20px;
+        font-size: 15px;
+        color: var(--gold-400);
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+      .settings-label {
+        display: block;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        margin-bottom: 6px;
+        letter-spacing: 0.04em;
+      }
+      .settings-input {
+        width: 100%;
+        padding: 10px 13px;
+        font-size: 14px;
+        margin-bottom: 6px;
+        box-sizing: border-box;
+        background: rgba(13,21,38,0.8);
+        border: 1px solid rgba(240,192,64,0.2);
+        border-radius: 8px;
+        color: var(--text-primary);
+        outline: none;
+        transition: border-color 0.2s;
+      }
+      .settings-input:focus { border-color: var(--gold-400); }
+      .settings-hint {
+        font-size: 11px;
+        color: var(--text-secondary);
+        margin-bottom: 18px;
+      }
+      .settings-btn-group {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 6px;
+      }
+      .settings-btn-cancel {
+        padding: 9px 18px;
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 8px;
+        background: none;
+        color: var(--text-secondary);
+        font-size: 13px;
+        cursor: pointer;
+        transition: 0.2s;
+      }
+      .settings-btn-cancel:hover { color: var(--text-primary); }
+      .settings-btn-save {
+        padding: 9px 20px;
+        border: none;
+        border-radius: 8px;
+        background: var(--gold-400);
+        color: var(--navy-950);
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: 0.2s;
+      }
+      .settings-btn-save:hover { background: var(--gold-500); }
+      .settings-btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
+
+      /* ── ④ BGM Control（インライン配置、fixed 解除） ── */
+      #bgm-control {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        padding: 8px 11px;
+        border-radius: 9999px;
+        background: var(--glass-bg);
+        backdrop-filter: var(--glass-blur);
+        -webkit-backdrop-filter: var(--glass-blur);
+        border: 1px solid var(--glass-border);
+        flex-shrink: 0;
+      }
+
+      #bgm-toggle {
+        background: none; border: none; cursor: pointer;
+        color: var(--text-primary);
+        display: flex; align-items: center; padding: 0;
+        transition: color 0.2s;
+      }
+      #bgm-toggle:hover { color: var(--gold-400); }
+      #bgm-toggle .material-icons { font-size: 16px; }
+
+      #bgm-slider-toggle {
+        background: none; border: none; cursor: pointer;
+        color: var(--text-secondary); font-size: 10px;
+        line-height: 1; padding: 0; transition: opacity 0.2s;
+      }
+      #bgm-slider-toggle:hover { color: var(--text-primary); }
+
+      #bgm-slider { display: none; width: 66px; accent-color: var(--gold-400); }
+      #bgm-slider.open { display: block; }
+    </style>
+  </head>
+  <body>
+
+    <!-- パートナー設定モーダル -->
+    <div id="settings-overlay" onclick="handleOverlayClick(event)">
+      <div id="settings-modal">
+        <h3><span class="material-icons" style="font-size:18px;">settings</span> パートナー設定</h3>
+
+        <label class="settings-label">あなたの名前（AIに呼んでもらいたい名前）</label>
+        <input type="text" id="settings-user-name" class="settings-input" placeholder="例: Rikki, たろう, Alex">
+        <div class="settings-hint">AIがこの名前であなたに語りかけます</div>
+
+        <label class="settings-label">AIパートナーの名前</label>
+        <input type="text" id="settings-ai-name" class="settings-input" placeholder="例: Titan, Luna, Nova">
+        <div class="settings-hint">あなたの専属AI伴走者の名前です</div>
+
+        <div class="settings-btn-group">
+          <button class="settings-btn-cancel" onclick="closeSettings()">キャンセル</button>
+          <button class="settings-btn-save" id="settings-save-btn" onclick="saveSettings()">保存する</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Synapse canvas background -->
+    <canvas id="synapse-canvas"></canvas>
+
+    <!-- Aurora overlay -->
+    <div id="aurora-overlay"></div>
+
+    <!-- Header -->
+    <div class="header glass">
+      <div class="title">
+        <img id="logo-img" src="./Genesis_pipe_Logo.png" alt="Genesis Pipe" class="title-logo"
+             onerror="this.style.display='none'; document.getElementById('logo-fallback').style.display='flex';">
+        <div id="logo-fallback" class="title-logo-fallback">🚀 <span>GENESIS PIPE</span></div>
+      </div>
+      <div id="toggle-wrap">
+        <button id="settings-btn" onclick="openSettings()" title="パートナー設定">
+          <span class="material-icons">settings</span>
+        </button>
+        <div class="switch-container">
+          <span id="mode-label">記録</span>
+          <div id="switch-border">
+            <label class="switch">
+              <input type="checkbox" id="ai-toggle" onchange="toggleMode()">
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chat -->
+    <div id="chat-area">
+      <div class="bubble system">あなたの貴重な言葉を宇宙に刻んでください。</div>
+    </div>
+
+    <!-- BGM -->
+    <audio id="bgm-audio" src="./AI_PARTNER_SYNC_BGM.m4a" loop preload="metadata"></audio>
+
+    <!-- Footer -->
+    <div class="footer glass">
+      <!-- BGM + Save button (同じ行) -->
+      <div class="save-row">
+        <div id="bgm-control">
+          <button id="bgm-toggle" onclick="toggleBgm()" title="BGM ON/OFF">
+            <span class="material-icons" id="bgm-icon">volume_off</span>
+          </button>
+          <button id="bgm-slider-toggle" onclick="toggleBgmSlider()">▲</button>
+          <input type="range" id="bgm-slider" min="0" max="100" value="8" oninput="setBgmVolume(this.value)">
+        </div>
+        <div id="save-area">
+          <button id="save-btn" onclick="saveConversation()">
+            <span class="material-icons" style="font-size:18px;">save</span>
+            会話ログを保存して終了
+          </button>
+        </div>
+      </div>
+      <!-- Input row -->
+      <div class="input-row">
+        <button id="mic-btn" class="icon-btn" onclick="toggleRecording()">
+          <span class="material-icons">mic</span>
+        </button>
+        <textarea id="text-input" rows="1" placeholder="思考を入力… (送信は→ボタン または 音声「送信」)"></textarea>
+        <button id="send-btn" class="icon-btn" onclick="handleSend()">
+          <span class="material-icons">send</span>
+        </button>
+      </div>
+    </div>
+
+    <script>
+      /* ═══════════════════════════════════════════
+         GAS Web App URL
+      ═══════════════════════════════════════════ */
+      /* iOS 15.3以前: 100dvh 非対応端末向け --vh フォールバック */
+      (function() {
+        function setVH() {
+          document.documentElement.style.setProperty('--vh', window.innerHeight * 0.01 + 'px');
+        }
+        setVH();
+        window.addEventListener('resize', setVH);
+        window.addEventListener('orientationchange', function() { setTimeout(setVH, 100); });
+      })();
+
+      const WEB_APP_URL = "YOUR_GAS_WEBAPP_URL"; // ← GASデプロイURL（/exec で終わるURL）を貼り付けてください;
+
+      /* ═══════════════════════════════════════════
+         ユーザー設定（名前）の初期化
+      ═══════════════════════════════════════════ */
+      let userName = 'あなた';
+      let aiName   = 'AI';
+
+      if (typeof google !== 'undefined' && google.script) {
+        google.script.run
+          .withSuccessHandler(function(s) {
+            if (s && s.userName) userName = s.userName;
+            if (s && s.aiName)   aiName   = s.aiName;
+          })
+          .getUserSettings();
+      }
+
+      /* ═══════════════════════════════════════════
+         SYNAPSE BACKGROUND (vanilla JS canvas)
+         AI PARTNER SYNC / The Armory aesthetic
+      ═══════════════════════════════════════════ */
+      (function initSynapse() {
+        const canvas = document.getElementById('synapse-canvas');
+        const ctx    = canvas.getContext('2d');
+
+        const NODE_COUNT      = 72;
+        const MAX_DIST        = 200;
+        const ATTRACT_DIST    = 90;
+        const REPEL_DIST      = 55;
+        const ATTRACT_FORCE   = 0.0006;
+        const REPEL_FORCE     = 0.035;
+        const MAX_SPEED       = 0.7;
+        const CURRENT_SPD_MIN = 0.0020;
+        const CURRENT_SPD_MAX = 0.0050;
+        const TAIL_MIN        = 0.10;
+        const TAIL_MAX        = 0.25;
+        const MAX_CURRENTS    = 35;
+        const SPAWN_CHANCE    = 0.022;
+        const MAX_CHAIN_DEPTH = 14;
+        const CHAIN_DIM       = 0.92;
+
+        let nodes    = [];
+        let currents = [];
+        let animId;
+
+        function resize() {
+          canvas.width  = window.innerWidth;
+          canvas.height = window.innerHeight;
+        }
+
+        function initNodes() {
+          const w = canvas.width, h = canvas.height;
+          const cols   = Math.ceil(Math.sqrt(NODE_COUNT * (w / h)));
+          const rows   = Math.ceil(NODE_COUNT / cols);
+          const cellW  = w / cols;
+          const cellH  = h / rows;
+          const margin = 0.15;
+          const pos    = [];
+
+          for (let r = 0; r < rows && pos.length < NODE_COUNT; r++) {
+            for (let c = 0; c < cols && pos.length < NODE_COUNT; c++) {
+              pos.push({
+                x: cellW * (c + margin + Math.random() * (1 - margin * 2)),
+                y: cellH * (r + margin + Math.random() * (1 - margin * 2)),
+              });
+            }
+          }
+
+          // Fisher-Yates shuffle
+          for (let i = pos.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [pos[i], pos[j]] = [pos[j], pos[i]];
+          }
+
+          nodes = pos.slice(0, NODE_COUNT).map(({ x, y }) => {
+            const a = Math.random() * Math.PI * 2;
+            const s = 0.1 + Math.random() * 0.2;
+            return {
+              x, y,
+              vx: Math.cos(a) * s,
+              vy: Math.sin(a) * s,
+              radius:     0.6 + Math.random() * 0.8,
+              pulse:      Math.random() * Math.PI * 2,
+              pulseSpeed: 0.014 + Math.random() * 0.014,
+              flash:      0,
+              flashDecay: 0.018 + Math.random() * 0.010,
+              lastSentTo: -1,
+            };
+          });
+          currents = [];
+        }
+
+        function getEdges() {
+          const edges = [];
+          for (let i = 0; i < nodes.length; i++) {
+            for (let j = i + 1; j < nodes.length; j++) {
+              const dx = nodes[i].x - nodes[j].x;
+              const dy = nodes[i].y - nodes[j].y;
+              if (Math.sqrt(dx * dx + dy * dy) < MAX_DIST) edges.push([i, j]);
+            }
+          }
+          return edges;
+        }
+
+        function spawnCurrent(edges) {
+          if (!edges.length) return;
+          const [a, b] = edges[Math.floor(Math.random() * edges.length)];
+          const [from, to] = Math.random() < 0.5 ? [a, b] : [b, a];
+          currents.push({
+            fromIdx: from, toIdx: to, progress: 0,
+            speed:      CURRENT_SPD_MIN + Math.random() * (CURRENT_SPD_MAX - CURRENT_SPD_MIN),
+            brightness: 0.75 + Math.random() * 0.25,
+            tailLength: TAIL_MIN + Math.random() * (TAIL_MAX - TAIL_MIN),
+            chainDepth: 0, prevIdx: from,
+          });
+        }
+
+        function continueChain(arrivedAt, cameFrom, speed, brightness, tailLength, chainDepth) {
+          nodes[arrivedAt].flash = Math.min(1.0, brightness * 1.15);
+          if (chainDepth >= MAX_CHAIN_DEPTH) return;
+
+          const candidates = [];
+          for (let j = 0; j < nodes.length; j++) {
+            if (j === arrivedAt || j === cameFrom) continue;
+            const dx = nodes[arrivedAt].x - nodes[j].x;
+            const dy = nodes[arrivedAt].y - nodes[j].y;
+            if (Math.sqrt(dx * dx + dy * dy) < MAX_DIST) candidates.push(j);
+          }
+
+          const nextTo = candidates.length
+            ? candidates[Math.floor(Math.random() * candidates.length)]
+            : cameFrom;
+
+          nodes[arrivedAt].lastSentTo = nextTo;
+          currents.push({
+            fromIdx: arrivedAt, toIdx: nextTo, progress: 0,
+            speed, brightness: brightness * CHAIN_DIM, tailLength,
+            chainDepth: chainDepth + 1, prevIdx: arrivedAt,
+          });
+        }
+
+        function draw() {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+          // Physics
+          for (let i = 0; i < nodes.length; i++) {
+            for (let j = i + 1; j < nodes.length; j++) {
+              const a = nodes[i], b = nodes[j];
+              const dx = b.x - a.x, dy = b.y - a.y;
+              const dist = Math.sqrt(dx * dx + dy * dy) || 0.001;
+              const nx = dx / dist, ny = dy / dist;
+              if (dist < REPEL_DIST) {
+                const f = REPEL_FORCE * (1 - dist / REPEL_DIST);
+                a.vx -= nx * f; a.vy -= ny * f;
+                b.vx += nx * f; b.vy += ny * f;
+              } else if (dist < ATTRACT_DIST) {
+                const f = ATTRACT_FORCE * (1 - dist / ATTRACT_DIST);
+                a.vx += nx * f; a.vy += ny * f;
+                b.vx -= nx * f; b.vy -= ny * f;
+              }
+            }
+          }
+
+          // Update nodes
+          for (const n of nodes) {
+            const spd = Math.sqrt(n.vx * n.vx + n.vy * n.vy);
+            if (spd > MAX_SPEED) { n.vx = (n.vx / spd) * MAX_SPEED; n.vy = (n.vy / spd) * MAX_SPEED; }
+            if (spd < 0.03) { n.vx += (Math.random() - 0.5) * 0.03; n.vy += (Math.random() - 0.5) * 0.03; }
+            n.x += n.vx; n.y += n.vy;
+            n.pulse  += n.pulseSpeed;
+            n.flash   = Math.max(0, n.flash - n.flashDecay);
+            if (n.x < 0 || n.x > canvas.width)  n.vx *= -1;
+            if (n.y < 0 || n.y > canvas.height) n.vy *= -1;
+          }
+
+          // Edges & currents
+          const edges = getEdges();
+          if (currents.length < MAX_CURRENTS && Math.random() < SPAWN_CHANCE) spawnCurrent(edges);
+
+          // Draw static edges
+          for (const [i, j] of edges) {
+            const a = nodes[i], b = nodes[j];
+            const dx = a.x - b.x, dy = a.y - b.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const t    = 1 - dist / MAX_DIST;
+            const isBridge =
+              (a.flash > 0.05 && a.lastSentTo === j) ||
+              (b.flash > 0.05 && b.lastSentTo === i);
+
+            if (isBridge) {
+              const bAlpha = Math.max(a.flash, b.flash) * 0.55;
+              const bGrad  = ctx.createLinearGradient(a.x, a.y, b.x, b.y);
+              bGrad.addColorStop(0, `rgba(240,192,64,${a.flash * 0.6})`);
+              bGrad.addColorStop(1, `rgba(240,192,64,${b.flash * 0.6})`);
+              ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+              ctx.strokeStyle = bGrad;
+              ctx.lineWidth   = 1.0 + bAlpha * 1.5;
+              ctx.stroke();
+            } else {
+              const flashBoost = Math.max(a.flash, b.flash) * 0.12;
+              const alpha      = Math.pow(t, 2.2) * 0.13 + flashBoost;
+              ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+              ctx.strokeStyle = `rgba(210,225,255,${Math.min(alpha, 0.45)})`;
+              ctx.lineWidth   = 0.5;
+              ctx.stroke();
+            }
+          }
+
+          // Draw currents
+          currents = currents.filter((cur) => {
+            cur.progress += cur.speed;
+            if (cur.progress >= 1.0) {
+              continueChain(cur.toIdx, cur.fromIdx, cur.speed, cur.brightness, cur.tailLength, cur.chainDepth);
+              return false;
+            }
+            const from = nodes[cur.fromIdx], to = nodes[cur.toIdx];
+            const hx   = from.x + (to.x - from.x) * cur.progress;
+            const hy   = from.y + (to.y - from.y) * cur.progress;
+            const ts   = Math.max(0, cur.progress - cur.tailLength);
+            const tx   = from.x + (to.x - from.x) * ts;
+            const ty2  = from.y + (to.y - from.y) * ts;
+
+            const lineGrad = ctx.createLinearGradient(tx, ty2, hx, hy);
+            lineGrad.addColorStop(0,   `rgba(240,192,64,0)`);
+            lineGrad.addColorStop(0.5, `rgba(240,192,64,${cur.brightness * 0.35})`);
+            lineGrad.addColorStop(1,   `rgba(255,245,180,${cur.brightness})`);
+            ctx.beginPath(); ctx.moveTo(tx, ty2); ctx.lineTo(hx, hy);
+            ctx.strokeStyle = lineGrad; ctx.lineWidth = 1.6; ctx.stroke();
+
+            const gR    = 5 + cur.brightness * 2;
+            const gGrad = ctx.createRadialGradient(hx, hy, 0, hx, hy, gR);
+            gGrad.addColorStop(0,   `rgba(255,255,220,${cur.brightness})`);
+            gGrad.addColorStop(0.3, `rgba(255,210,80,${cur.brightness * 0.9})`);
+            gGrad.addColorStop(1,   `rgba(240,192,64,0)`);
+            ctx.beginPath(); ctx.arc(hx, hy, gR, 0, Math.PI * 2);
+            ctx.fillStyle = gGrad; ctx.fill();
+            return true;
+          });
+
+          // Draw nodes
+          for (const n of nodes) {
+            const glow  = (Math.sin(n.pulse) + 1) / 2;
+            const flash = n.flash;
+            const r     = n.radius + glow * 0.6 + flash * 4;
+
+            if (flash > 0.01) {
+              const isStage1 = flash > 0.65;
+              const coreG    = isStage1 ? 248 : 200;
+              const coreB    = isStage1 ? 180 : 80;
+              const bR       = r * (isStage1 ? 7 : 5.5);
+              const burst    = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, bR);
+              burst.addColorStop(0,    `rgba(255,${coreG},${coreB},${flash * 0.95})`);
+              burst.addColorStop(0.25, `rgba(240,192,64,${flash * 0.65})`);
+              burst.addColorStop(0.6,  `rgba(240,150,0,${flash * 0.2})`);
+              burst.addColorStop(1,    `rgba(240,192,64,0)`);
+              ctx.beginPath(); ctx.arc(n.x, n.y, bR, 0, Math.PI * 2);
+              ctx.fillStyle = burst; ctx.fill();
+
+              if (isStage1) {
+                const ringR = r * 9 * (1 - flash + 0.4);
+                ctx.beginPath(); ctx.arc(n.x, n.y, ringR, 0, Math.PI * 2);
+                ctx.strokeStyle = `rgba(255,220,80,${flash * 0.3})`; ctx.lineWidth = 1.2; ctx.stroke();
+              }
+
+              ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+              ctx.fillStyle = `rgba(255,${coreG},${coreB},${0.8 + flash * 0.2})`; ctx.fill();
+            } else {
+              const oG = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, r * 3);
+              oG.addColorStop(0, `rgba(220,230,255,${0.12 + glow * 0.08})`);
+              oG.addColorStop(1, `rgba(220,230,255,0)`);
+              ctx.beginPath(); ctx.arc(n.x, n.y, r * 3, 0, Math.PI * 2);
+              ctx.fillStyle = oG; ctx.fill();
+
+              ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+              ctx.fillStyle = `rgba(220,230,255,${0.45 + glow * 0.2})`; ctx.fill();
+            }
+          }
+
+          animId = requestAnimationFrame(draw);
+        }
+
+        function onResize() { resize(); initNodes(); }
+        resize();
+        initNodes();
+        draw();
+        window.addEventListener('resize', onResize);
+      })();
+
+
+      /* ═══════════════════════════════════════════
+         BGM — AI_PARTNER_SYNC_BGM.m4a
+      ═══════════════════════════════════════════ */
+      const bgmAudio = document.getElementById('bgm-audio');
+      bgmAudio.volume = 0.08;
+      let bgmPlaying = false;
+
+      // BGMファイルが存在しない場合はコントロールをグレーアウト
+      bgmAudio.addEventListener('error', function() {
+        const ctrl = document.getElementById('bgm-control');
+        ctrl.style.opacity = '0.35';
+        ctrl.style.pointerEvents = 'none';
+        ctrl.title = 'BGMファイルが設定されていません';
+      });
+
+      function toggleBgm() {
+        if (!bgmPlaying) {
+          bgmAudio.play().catch(() => {});
+          bgmPlaying = true;
+          document.getElementById('bgm-icon').textContent = 'volume_up';
+        } else {
+          bgmAudio.pause();
+          bgmPlaying = false;
+          document.getElementById('bgm-icon').textContent = 'volume_off';
+        }
+      }
+
+      function setBgmVolume(val) {
+        bgmAudio.volume = val / 100;
+      }
+
+      function toggleBgmSlider() {
+        const slider = document.getElementById('bgm-slider');
+        const btn    = document.getElementById('bgm-slider-toggle');
+        const isOpen = slider.classList.toggle('open');
+        btn.textContent = isOpen ? '▼' : '▲';
+      }
+
+
+      /* ═══════════════════════════════════════════
+         Chat / Voice Logic
+      ═══════════════════════════════════════════ */
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'ja-JP';
+      recognition.continuous = true;
+      recognition.interimResults = false;
+
+      let isRecording = false;
+      let conversationHistory = "";
+      let silenceTimer = null;
+      const SILENCE_DELAY = 800; // 無音→改行までのms
+
+      const textInput = document.getElementById('text-input');
+      const micBtn    = document.getElementById('mic-btn');
+      const chatArea  = document.getElementById('chat-area');
+      const aiToggle  = document.getElementById('ai-toggle');
+
+      function toggleRecording() {
+        isRecording ? recognition.stop() : recognition.start();
+      }
+      recognition.onstart = () => {
+        isRecording = true;
+        micBtn.classList.add('recording');
+        textInput.placeholder = "音声認識中…";
+      };
+      recognition.onend = () => {
+        isRecording = false;
+        micBtn.classList.remove('recording');
+        textInput.placeholder = "思考を入力… (送信は→ボタン または 音声「送信」)";
+        clearTimeout(silenceTimer); // 停止時は改行タイマーをキャンセル
+      };
+      recognition.onresult = (e) => {
+        let transcript = "";
+        for (let i = e.resultIndex; i < e.results.length; ++i) {
+          if (e.results[i].isFinal) transcript += e.results[i][0].transcript;
+        }
+        if (!transcript) return;
+
+        // 無音タイマーをリセット（新しい音声が来たので改行をキャンセル）
+        clearTimeout(silenceTimer);
+
+        // 「送信」単独発話 → 送信トリガー（テキストエリア・チャットへの表示なし）
+        const keyword = transcript.trim().replace(/[。、！!？?\s…　]+$/, '');
+        if (keyword === '送信') {
+          handleSend();
+          return;
+        }
+
+        // テキストを追記（同じ発話ブロック内はそのまま連結）
+        textInput.value += transcript;
+        autoResize(textInput);
+
+        // 0.8秒無音が続いたら改行を挿入（次の発話が新しい行から始まる）
+        silenceTimer = setTimeout(() => {
+          if (isRecording && textInput.value && !textInput.value.endsWith('\n')) {
+            textInput.value += '\n';
+            autoResize(textInput);
+          }
+        }, SILENCE_DELAY);
+      };
+      recognition.onerror = (e) => addBubble("⚠️ マイクエラー: " + e.error, 'system');
+
+      function handleSend() {
+        const text = textInput.value.trim();
+        if (!text) return;
+        if (isRecording) recognition.stop();
+        clearTimeout(silenceTimer);
+        addBubble(text, 'user');
+        textInput.value = "";
+        textInput.style.height = 'auto';
+        conversationHistory += `[${userName}]: ${text}\n`;
+        // GASへの送信は「会話ログを保存して終了」ボタンのみ
+        // AI対話モードのときだけTitanに送信
+        if (aiToggle.checked) {
+          requestAiReply(text);
+        }
+      }
+
+      function requestAiReply(userText) {
+        const loadingId = addLoading();
+        saveToGas("ai_chat", userText, conversationHistory, (data) => {
+          removeLoading(loadingId);
+          const reply = (data && data.reply) ? data.reply : '（返答を受信できませんでした）';
+          addBubble(data.reply, 'titan');
+          conversationHistory += `[${aiName}]: ${reply}\n`;
+        });
+      }
+
+      function saveConversation() {
+        if (!conversationHistory) {
+          addBubble("⚠️ 保存する会話がありません", 'system');
+          return;
+        }
+        addBubble("アーカイブへ送信中…", 'system');
+        saveToGas("save", conversationHistory, null, () => {
+          addBubble("✅ 保存完了。セッションをリセットします。", 'system');
+          conversationHistory = "";
+        });
+      }
+
+      function saveToGas(type, text, history = null, callback = null) {
+        // 安全装置：URLが /exec で終わっているかチェック
+        if (!WEB_APP_URL.includes("/macros/s/")) { 
+          alert("⚠️ Titanからの警告: WEB_APP_URLが /exec で終わるデプロイURLになっていないぞ！"); 
+          return; 
+        }
+
+        fetch(WEB_APP_URL, {
+          method: "POST",
+          redirect: "follow", // 必須：GASのリダイレクトを追従して正しいレスポンスを掴み取る
+          headers: {
+            // 必須：CORSプレフライト(OPTIONS)を回避するため、あえて text/plain で送る
+            "Content-Type": "text/plain;charset=utf-8" 
+          },
+          body: JSON.stringify({ type, fullText: text, history }),
+        })
+        .then(r => r.json()) // opaqueではなく、正々堂々とJSONとして受け取る
+        .then(data => {
+          if (callback) {
+            callback(data);
+          } else {
+            if (data.status === 'success') addBubble("✅ スプレッドシートに記録完了", 'system');
+            if (data.oracle)              addBubble("🔮 " + data.oracle, 'titan');
+          }
+        })
+        .catch(err => {
+          console.error("Titan Comms Error:", err);
+          // エラー時も処理が止まらないよう、ユーザーに明示する
+          if (callback) {
+            callback({ reply: '（通信エラーだ。パイプの接続を確認してくれ）' });
+          } else {
+            addBubble("⚠️ 通信エラー: 記録に失敗した。コンソールを確認してくれ", 'system');
+          }
+        });
+      }
+
+      function toggleMode() {
+        document.getElementById('mode-label').innerText = aiToggle.checked ? "AI対話" : "記録";
+      }
+
+      /* ── 設定モーダル ── */
+      function openSettings() {
+        document.getElementById('settings-user-name').value = userName;
+        document.getElementById('settings-ai-name').value   = aiName;
+        const btn = document.getElementById('settings-save-btn');
+        btn.disabled = false;
+        btn.textContent = '保存する';
+        document.getElementById('settings-overlay').classList.add('open');
+      }
+
+      function closeSettings() {
+        document.getElementById('settings-overlay').classList.remove('open');
+      }
+
+      function handleOverlayClick(e) {
+        if (e.target === document.getElementById('settings-overlay')) closeSettings();
+      }
+
+      function saveSettings() {
+        const newUserName = document.getElementById('settings-user-name').value.trim();
+        const newAiName   = document.getElementById('settings-ai-name').value.trim();
+        if (!newUserName || !newAiName) { alert('両方の名前を入力してください'); return; }
+
+        const btn = document.getElementById('settings-save-btn');
+        btn.disabled = true;
+        btn.textContent = '保存中...';
+
+        if (typeof google !== 'undefined' && google.script) {
+          google.script.run
+            .withSuccessHandler(function() {
+              userName = newUserName;
+              aiName   = newAiName;
+              btn.textContent = '保存完了！';
+              setTimeout(closeSettings, 700);
+            })
+            .withFailureHandler(function(err) {
+              alert('エラー: ' + err.message);
+              btn.disabled = false;
+              btn.textContent = '保存する';
+            })
+            .saveUserSettings(newUserName, newAiName);
+        } else {
+          // ローカルプレビュー用（GAS外）
+          userName = newUserName;
+          aiName   = newAiName;
+          btn.textContent = '保存完了！';
+          setTimeout(closeSettings, 700);
+        }
+      }
+
+      function addBubble(text, type) {
+        const div = document.createElement('div');
+        div.className = `bubble ${type}`;
+        div.innerHTML = text.replace(/\n/g, '<br>');
+        chatArea.appendChild(div);
+        chatArea.scrollTop = chatArea.scrollHeight;
+      }
+
+      function addLoading() {
+        const id  = 'loading-' + Date.now();
+        const div = document.createElement('div');
+        div.id = id; div.className = 'bubble titan';
+        div.innerHTML = '<div class="typing-indicator"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>';
+        chatArea.appendChild(div);
+        chatArea.scrollTop = chatArea.scrollHeight;
+        return id;
+      }
+
+      function removeLoading(id) { const el = document.getElementById(id); if (el) el.remove(); }
+
+      function autoResize(el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; }
+      textInput.addEventListener('input', function() { autoResize(this); });
+      // Enter は改行のみ。送信は→ボタン or 音声「送信」
+    </script>
+  </body>
+</html>
