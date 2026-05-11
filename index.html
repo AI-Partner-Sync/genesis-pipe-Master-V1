@@ -697,14 +697,14 @@
       /* ═══════════════════════════════════════════
          ユーザー設定（名前）の初期化
       ═══════════════════════════════════════════ */
-      let userName = 'あなた';
-      let aiName   = 'AI';
+      let userName = localStorage.getItem('gp_userName') || 'あなた';
+      let aiName   = localStorage.getItem('gp_aiName')   || 'AI';
 
       if (typeof google !== 'undefined' && google.script) {
         google.script.run
           .withSuccessHandler(function(s) {
-            if (s && s.userName) userName = s.userName;
-            if (s && s.aiName)   aiName   = s.aiName;
+            if (s && s.userName) { userName = s.userName; localStorage.setItem('gp_userName', userName); }
+            if (s && s.aiName)   { aiName   = s.aiName;   localStorage.setItem('gp_aiName',   aiName); }
           })
           .getUserSettings();
       }
@@ -1189,14 +1189,18 @@
         btn.disabled = true;
         btn.textContent = '保存中...';
 
+        function applyNames() {
+          userName = newUserName;
+          aiName   = newAiName;
+          localStorage.setItem('gp_userName', userName);
+          localStorage.setItem('gp_aiName',   aiName);
+          btn.textContent = '保存完了！';
+          setTimeout(closeSettings, 700);
+        }
+
         if (typeof google !== 'undefined' && google.script) {
           google.script.run
-            .withSuccessHandler(function() {
-              userName = newUserName;
-              aiName   = newAiName;
-              btn.textContent = '保存完了！';
-              setTimeout(closeSettings, 700);
-            })
+            .withSuccessHandler(applyNames)
             .withFailureHandler(function(err) {
               alert('エラー: ' + err.message);
               btn.disabled = false;
@@ -1204,11 +1208,7 @@
             })
             .saveUserSettings(newUserName, newAiName);
         } else {
-          // ローカルプレビュー用（GAS外）
-          userName = newUserName;
-          aiName   = newAiName;
-          btn.textContent = '保存完了！';
-          setTimeout(closeSettings, 700);
+          applyNames();
         }
       }
 
