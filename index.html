@@ -521,14 +521,6 @@
       <input type="text" id="settings-ai-name" class="settings-input" placeholder="例: けんちゃん">
       <div class="settings-hint">あなたの専属AI伴走者の名前です</div>
 
-      <div class="settings-divider"></div>
-      <label class="settings-label" style="font-size:10px;letter-spacing:.12em;opacity:.7">自動蒸留トリガー — 初回に1回だけ実行してください</label>
-      <button type="button" id="trigger-setup-btn" onclick="setupTriggers()"
-        style="width:100%;padding:11px;border-radius:10px;border:1px solid rgba(79,156,249,0.3);background:rgba(79,156,249,0.07);color:#60a5fa;font-size:13px;cursor:pointer;transition:all .2s;margin-bottom:4px">
-        ⏰ 日・週・月・年のトリガーを設定する
-      </button>
-      <div class="settings-hint" id="trigger-result"></div>
-
       <div class="settings-btn-group">
         <button class="settings-btn-cancel" onclick="closeSettings()">キャンセル</button>
         <button class="settings-btn-save" id="settings-save-btn" onclick="saveSettings()">保存する</button>
@@ -888,32 +880,9 @@
       display.title = webAppUrl || '';
       document.getElementById('settings-gas-url-input').value = webAppUrl || '';
       document.getElementById('settings-url-edit').classList.remove('open');
-      document.getElementById('trigger-result').textContent = '';
-      const btn = document.getElementById('settings-save-btn');
+const btn = document.getElementById('settings-save-btn');
       btn.disabled = false; btn.textContent = '保存する';
       document.getElementById('settings-overlay').classList.add('open');
-    }
-    function setupTriggers() {
-      if (!webAppUrl) { alert('先にGASウェブアプリURLを設定してください'); return; }
-      var btn    = document.getElementById('trigger-setup-btn');
-      var result = document.getElementById('trigger-result');
-      btn.disabled = true; btn.textContent = '⏳ 設定中...';
-      fetch(webAppUrl, {
-        method: 'POST', redirect: 'follow',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ type: 'setup_triggers' })
-      })
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
-        result.textContent = data.message || '完了';
-        result.style.color = '#60a5fa';
-        btn.disabled = false; btn.textContent = '⏰ 日・週・月・年のトリガーを設定する';
-      })
-      .catch(function() {
-        result.textContent = '⚠️ 通信エラー。GAS URLを確認してください';
-        result.style.color = '#f87171';
-        btn.disabled = false; btn.textContent = '⏰ 日・週・月・年のトリガーを設定する';
-      });
     }
     function closeSettings() {
       document.getElementById('settings-overlay').classList.remove('open');
