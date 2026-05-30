@@ -522,26 +522,6 @@
       <div class="settings-hint">あなたの専属AI伴走者の名前です</div>
 
       <div class="settings-divider"></div>
-      <label class="settings-label" style="font-size:10px;letter-spacing:.12em;opacity:.7">AI最適化（任意）— 入力するとAIがあなたの気質に合わせて応答します</label>
-      <label class="settings-label">生年月日</label>
-      <input type="date" id="settings-birthdate" class="settings-input">
-      <label class="settings-label" style="margin-top:8px">性別</label>
-      <div style="display:flex;gap:8px;margin-bottom:4px">
-        <button type="button" id="gender-male-btn"
-          onclick="selectGender('male')"
-          style="flex:1;padding:9px;border-radius:10px;border:1px solid rgba(240,192,64,0.2);background:rgba(255,255,255,0.04);color:var(--text-secondary);font-size:13px;cursor:pointer;transition:all .2s">
-          男性
-        </button>
-        <button type="button" id="gender-female-btn"
-          onclick="selectGender('female')"
-          style="flex:1;padding:9px;border-radius:10px;border:1px solid rgba(240,192,64,0.2);background:rgba(255,255,255,0.04);color:var(--text-secondary);font-size:13px;cursor:pointer;transition:all .2s">
-          女性
-        </button>
-      </div>
-      <input type="hidden" id="settings-gender" value="">
-      <div class="settings-hint">入力しない場合でも通常通り使用できます</div>
-
-      <div class="settings-divider"></div>
       <label class="settings-label" style="font-size:10px;letter-spacing:.12em;opacity:.7">自動蒸留トリガー — 初回に1回だけ実行してください</label>
       <button type="button" id="trigger-setup-btn" onclick="setupTriggers()"
         style="width:100%;padding:11px;border-radius:10px;border:1px solid rgba(79,156,249,0.3);background:rgba(79,156,249,0.07);color:#60a5fa;font-size:13px;cursor:pointer;transition:all .2s;margin-bottom:4px">
@@ -670,24 +650,8 @@
     let webAppUrl   = _saved.webAppUrl   || '';
     let userName    = _saved.userName    || 'あなた';
     let aiName      = _saved.aiName      || 'AI';
-    let userBirthdate = _saved.birthdate || '';
-    let userGender    = _saved.gender    || '';
-    // APIキーはGASのUserProperties（サイドバー）で管理。ブラウザには保存しない。
-
-    /* ── 気質計算（personality_db.gsと同じロジック） ── */
-    const _EPOCH_HTML = new Date('1926-02-04');
-    const _T60_MAP = {1:'動5',2:'感4',3:'動8',4:'動6',5:'感3',6:'考11',7:'動5',8:'感4',9:'動8',10:'動6',11:'感1',12:'動7',13:'考9',14:'感2',15:'動8',16:'動6',17:'感1',18:'動7',19:'考9',20:'感2',21:'考12',22:'考12',23:'感2',24:'考9',25:'考9',26:'感2',27:'考12',28:'考12',29:'感2',30:'考9',31:'動7',32:'感1',33:'動6',34:'動8',35:'感2',36:'考9',37:'動7',38:'感1',39:'動6',40:'動8',41:'感4',42:'動5',43:'考11',44:'感3',45:'動6',46:'動8',47:'感4',48:'動5',49:'考11',50:'感3',51:'考10',52:'考10',53:'感3',54:'考11',55:'考11',56:'感3',57:'考10',58:'考10',59:'感3',60:'考11'};
-    const _GRP = {'感':'感じて','動':'動いて','考':'考えて'};
-    function calcPersonality(birthdate, gender) {
-      if (!birthdate || !gender) return null;
-      var birth = new Date(birthdate);
-      var diff  = Math.round((birth - _EPOCH_HTML) / 86400000);
-      var type60 = ((diff % 60) + 60) % 60 + 1;
-      var type12Code  = _T60_MAP[type60] || '考9';
-      var type12Group = _GRP[type12Code.charAt(0)] || '考えて';
-      var isOptimistic = parseInt(type12Code.replace(/[^0-9]/g,'')) % 2 === 1;
-      return { type60, type12Code, type12Group, isOptimistic, gender };
-    }
+    // 個人情報（生年月日・性別・APIキー）はGASのUserProperties（サイドバー）でのみ管理。
+    // ブラウザには保存しない。GASがUserPropertiesから気質を読んでOracleに注入する。
 
     /* ── iOS --vh フォールバック ── */
     (function() {
@@ -868,7 +832,7 @@
       fetch(webAppUrl, {
         method: "POST", redirect: "follow",
         headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ type, fullText: text, history, userName, aiName, ...calcPersonality(userBirthdate, userGender) }),
+        body: JSON.stringify({ type, fullText: text, history, userName, aiName }),
       })
       .then(r => r.json())
       .then(data => {
@@ -924,18 +888,10 @@
       display.title = webAppUrl || '';
       document.getElementById('settings-gas-url-input').value = webAppUrl || '';
       document.getElementById('settings-url-edit').classList.remove('open');
-      // APIキー・生年月日・性別の現在値をフォームに反映
-document.getElementById('settings-birthdate').value = userBirthdate || '';
-      document.getElementById('settings-gender').value    = userGender    || '';
-      _applyGenderStyle(userGender);
       document.getElementById('trigger-result').textContent = '';
       const btn = document.getElementById('settings-save-btn');
       btn.disabled = false; btn.textContent = '保存する';
       document.getElementById('settings-overlay').classList.add('open');
-    }
-    function selectGender(g) {
-      document.getElementById('settings-gender').value = g;
-      _applyGenderStyle(g);
     }
     function setupTriggers() {
       if (!webAppUrl) { alert('先にGASウェブアプリURLを設定してください'); return; }
@@ -958,14 +914,6 @@ document.getElementById('settings-birthdate').value = userBirthdate || '';
         result.style.color = '#f87171';
         btn.disabled = false; btn.textContent = '⏰ 日・週・月・年のトリガーを設定する';
       });
-    }
-    function _applyGenderStyle(g) {
-      var mBtn = document.getElementById('gender-male-btn');
-      var fBtn = document.getElementById('gender-female-btn');
-      var activeStyle = 'background:rgba(240,192,64,0.18);border-color:rgba(240,192,64,0.6);color:#f0c040;';
-      var baseStyle   = 'background:rgba(255,255,255,0.04);border-color:rgba(240,192,64,0.2);color:var(--text-secondary);';
-      mBtn.style.cssText = mBtn.style.cssText.replace(/background[^;]*;|border-color[^;]*;|color[^;]*;/g,'') + (g==='male'   ? activeStyle : baseStyle);
-      fBtn.style.cssText = fBtn.style.cssText.replace(/background[^;]*;|border-color[^;]*;|color[^;]*;/g,'') + (g==='female' ? activeStyle : baseStyle);
     }
     function closeSettings() {
       document.getElementById('settings-overlay').classList.remove('open');
@@ -999,11 +947,7 @@ document.getElementById('settings-birthdate').value = userBirthdate || '';
       if (urlEditOpen && urlInput) { webAppUrl = urlInput; }
       userName = newUserName; aiName = newAiName;
       // 生年月日・性別を取得・保存
-      const newBirthdate = document.getElementById('settings-birthdate').value.trim();
-      const newGender    = document.getElementById('settings-gender').value;
-      if (newBirthdate) userBirthdate = newBirthdate;
-      if (newGender)    userGender    = newGender;
-      saveToStorage({ webAppUrl, userName, aiName, birthdate: userBirthdate, gender: userGender });
+      saveToStorage({ webAppUrl, userName, aiName });
 
       btn.textContent = '保存完了！';
       setTimeout(closeSettings, 700);
