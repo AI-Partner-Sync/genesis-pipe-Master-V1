@@ -261,6 +261,17 @@
     }
     #settings-btn:hover { color: var(--gold-400); background: rgba(240,192,64,0.08); }
     #settings-btn .material-icons { font-size: 20px; }
+    #tts-btn { background: none; border: none; cursor: pointer; color: var(--text-secondary); display: flex; align-items: center; padding: 6px; border-radius: 8px; transition: color 0.2s, background 0.2s; margin-right: 2px; }
+    #tts-btn:hover { color: var(--gold-400); background: rgba(240,192,64,0.08); }
+    #tts-btn.active { color: var(--gold-400); }
+    #tts-btn .material-icons { font-size: 20px; }
+    .tts-section-title { font-size: 11px; font-weight: 700; color: var(--gold-400); letter-spacing: 0.08em; text-transform: uppercase; margin: 16px 0 10px; border-top: 1px solid rgba(240,192,64,0.15); padding-top: 14px; }
+    .settings-select { width: 100%; padding: 10px 13px; font-size: 14px; margin-bottom: 6px; box-sizing: border-box; background: rgba(13,21,38,0.8); border: 1px solid rgba(240,192,64,0.2); border-radius: 8px; color: var(--text-primary); outline: none; }
+    .settings-select:focus { border-color: var(--gold-400); }
+    .settings-select option { background: #0d1526; }
+    .slider-row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+    .slider-row input[type=range] { flex: 1; accent-color: var(--gold-400); }
+    .slider-val { font-size: 12px; color: var(--gold-400); font-weight: 700; min-width: 36px; text-align: right; }
 
     /* ── Settings Modal ── */
     #settings-overlay {
@@ -521,6 +532,32 @@
       <input type="text" id="settings-ai-name" class="settings-input" placeholder="例: けんちゃん">
       <div class="settings-hint">あなたの専属AI伴走者の名前です</div>
 
+      <!-- TTS設定 -->
+      <div class="tts-section-title">🔊 音声読み上げ（CLOUD TTS）</div>
+      <label class="settings-label">声の種類</label>
+      <select id="settings-tts-voice" class="settings-select">
+        <option value="ja-JP-Neural2-C">男性A — Neural2-C（低音・落ち着き）</option>
+        <option value="ja-JP-Neural2-D">男性B — Neural2-D（若め・明るめ）</option>
+        <option value="ja-JP-Neural2-B">女性A — Neural2-B（自然・明るい）</option>
+        <option value="ja-JP-Wavenet-C">男性C — Wavenet-C（軽量・標準）</option>
+        <option value="ja-JP-Wavenet-B">女性B — Wavenet-B（軽量・標準）</option>
+      </select>
+      <div class="settings-hint">Neural2 が最も自然。Wavenet は応答が少し速い。</div>
+      <label class="settings-label">話す速度</label>
+      <div class="slider-row">
+        <input type="range" id="settings-tts-rate" min="0.7" max="1.3" step="0.05" value="0.93"
+          oninput="document.getElementById('rate-val').textContent=parseFloat(this.value).toFixed(2)">
+        <span class="slider-val" id="rate-val">0.93</span>
+      </div>
+      <div class="settings-hint">0.7（ゆっくり）→ 1.0（標準）→ 1.3（速め）</div>
+      <label class="settings-label">ピッチ（音の高さ）</label>
+      <div class="slider-row">
+        <input type="range" id="settings-tts-pitch" min="-5" max="5" step="0.5" value="0"
+          oninput="document.getElementById('pitch-val').textContent=parseFloat(this.value).toFixed(1)">
+        <span class="slider-val" id="pitch-val">0.0</span>
+      </div>
+      <div class="settings-hint">−5（低め）→ 0（標準）→ +5（高め）</div>
+
       <div class="settings-btn-group">
         <button class="settings-btn-cancel" onclick="closeSettings()">キャンセル</button>
         <button class="settings-btn-save" id="settings-save-btn" onclick="saveSettings()">保存する</button>
@@ -539,6 +576,9 @@
       <div id="logo-fallback" class="title-logo-fallback">🚀 <span>GENESIS PIPE</span></div>
     </div>
     <div id="toggle-wrap">
+      <button id="tts-btn" onclick="toggleTts()" title="音声読み上げ ON/OFF">
+        <span class="material-icons" id="tts-icon">volume_off</span>
+      </button>
       <button id="settings-btn" onclick="openSettings()" title="パートナー設定">
         <span class="material-icons">settings</span>
       </button>
@@ -642,6 +682,11 @@
     let webAppUrl   = _saved.webAppUrl   || '';
     let userName    = _saved.userName    || 'あなた';
     let aiName      = _saved.aiName      || 'AI';
+    let ttsVoice    = _saved.ttsVoice    || 'ja-JP-Neural2-C';
+    let ttsRate     = (_saved.ttsRate    != null) ? _saved.ttsRate  : 0.93;
+    let ttsPitch    = (_saved.ttsPitch   != null) ? _saved.ttsPitch : 0.0;
+    let ttsEnabled  = false;
+    let currentAudio = null;
     // 個人情報（生年月日・性別・APIキー）はGASのUserProperties（サイドバー）でのみ管理。
     // ブラウザには保存しない。GASがUserPropertiesから気質を読んでOracleに注入する。
 
@@ -791,6 +836,7 @@
         const reply = (data && data.reply) ? data.reply : '（返答を受信できませんでした）';
         addBubble(reply, 'titan');
         conversationHistory += `[${aiName}]: ${reply}\n`;
+        speakText(reply);
       });
     }
 
@@ -882,6 +928,12 @@
       document.getElementById('settings-url-edit').classList.remove('open');
 const btn = document.getElementById('settings-save-btn');
       btn.disabled = false; btn.textContent = '保存する';
+      // TTS設定をフォームに反映
+      document.getElementById('settings-tts-voice').value = ttsVoice;
+      const rEl = document.getElementById('settings-tts-rate');
+      const pEl = document.getElementById('settings-tts-pitch');
+      if (rEl) { rEl.value = ttsRate; document.getElementById('rate-val').textContent = parseFloat(ttsRate).toFixed(2); }
+      if (pEl) { pEl.value = ttsPitch; document.getElementById('pitch-val').textContent = parseFloat(ttsPitch).toFixed(1); }
       document.getElementById('settings-overlay').classList.add('open');
     }
     function closeSettings() {
@@ -903,9 +955,13 @@ const btn = document.getElementById('settings-save-btn');
       }).catch(function() { prompt('URLをコピーしてください:', webAppUrl); });
     }
     function saveSettings() {
-      const newUserName = document.getElementById('settings-user-name').value.trim();
-      const newAiName   = document.getElementById('settings-ai-name').value.trim();
+      const newUserName  = document.getElementById('settings-user-name').value.trim();
+      const newAiName    = document.getElementById('settings-ai-name').value.trim();
       if (!newUserName || !newAiName) { alert('両方の名前を入力してください'); return; }
+      const newTtsVoice  = document.getElementById('settings-tts-voice').value;
+      const newTtsRate   = parseFloat(document.getElementById('settings-tts-rate').value);
+      const newTtsPitch  = parseFloat(document.getElementById('settings-tts-pitch').value);
+      ttsVoice = newTtsVoice; ttsRate = newTtsRate; ttsPitch = newTtsPitch;
       const urlInput   = document.getElementById('settings-gas-url-input').value.trim();
       const urlEditOpen = document.getElementById('settings-url-edit').classList.contains('open');
       if (urlEditOpen && urlInput && !urlInput.includes('/macros/s/')) {
@@ -916,7 +972,7 @@ const btn = document.getElementById('settings-save-btn');
       if (urlEditOpen && urlInput) { webAppUrl = urlInput; }
       userName = newUserName; aiName = newAiName;
       // 生年月日・性別を取得・保存
-      saveToStorage({ webAppUrl, userName, aiName });
+      saveToStorage({ webAppUrl, userName, aiName, ttsVoice, ttsRate, ttsPitch });
 
       btn.textContent = '保存完了！';
       setTimeout(closeSettings, 700);
@@ -998,6 +1054,59 @@ const btn = document.getElementById('settings-save-btn');
     /* ── 初期化 ── */
     initMic();
     checkInitialSetup();
+  
+    /* ── TTS ── */
+    function toggleTts() {
+      ttsEnabled = !ttsEnabled;
+      const btn = document.getElementById('tts-btn');
+      const icon = document.getElementById('tts-icon');
+      if (ttsEnabled) {
+        icon.textContent = 'record_voice_over'; btn.classList.add('active');
+        addBubble('🔊 音声読み上げ ON', 'system');
+      } else {
+        icon.textContent = 'voice_over_off'; btn.classList.remove('active');
+        if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+        window.speechSynthesis && window.speechSynthesis.cancel();
+        addBubble('🔇 音声読み上げ OFF', 'system');
+      }
+    }
+
+    function speakText(text) {
+      if (!ttsEnabled) return;
+      if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+      window.speechSynthesis && window.speechSynthesis.cancel();
+      const plain = text.replace(/<[^>]*>/g, '').replace(/\n+/g, '。').substring(0, 4000);
+      if (!webAppUrl || !webAppUrl.includes('/macros/s/')) { fallbackSpeak(plain); return; }
+      fetch(webAppUrl, {
+        method: 'POST', redirect: 'follow',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ type: 'tts', text: plain, voice: ttsVoice, rate: ttsRate, pitch: ttsPitch })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.audioContent) {
+          currentAudio = new Audio('data:audio/mp3;base64,' + data.audioContent);
+          currentAudio.play().catch(() => fallbackSpeak(plain));
+          currentAudio.onended = () => { currentAudio = null; };
+        } else { fallbackSpeak(plain); }
+      })
+      .catch(() => fallbackSpeak(plain));
+    }
+
+    function fallbackSpeak(plain) {
+      if (!window.speechSynthesis) return;
+      window.speechSynthesis.cancel();
+      const utter = new SpeechSynthesisUtterance(plain);
+      utter.lang = 'ja-JP'; utter.rate = ttsRate; utter.pitch = 1.0;
+      const voices = window.speechSynthesis.getVoices();
+      const priority = ['Otoya', 'Google 日本語', 'Kyoko', 'Microsoft Haruka'];
+      let best = null;
+      for (const name of priority) { best = voices.find(v => v.name.includes(name)); if (best) break; }
+      if (!best) best = voices.find(v => v.lang && v.lang.startsWith('ja'));
+      if (best) utter.voice = best;
+      window.speechSynthesis.speak(utter);
+    }
+
   </script>
 </body>
 </html>
