@@ -261,6 +261,9 @@
     }
     #settings-btn:hover { color: var(--gold-400); background: rgba(240,192,64,0.08); }
     #settings-btn .material-icons { font-size: 20px; }
+    #timeline-btn { background: none; border: none; cursor: pointer; color: var(--text-secondary); display: flex; align-items: center; padding: 6px; border-radius: 8px; transition: color 0.2s, background 0.2s; margin-right: 2px; text-decoration: none; }
+    #timeline-btn:hover { color: var(--gold-400); background: rgba(240,192,64,0.08); }
+    #timeline-btn .material-icons { font-size: 20px; }
     #tts-btn { background: none; border: none; cursor: pointer; color: var(--text-secondary); display: flex; align-items: center; padding: 6px; border-radius: 8px; transition: color 0.2s, background 0.2s; margin-right: 2px; }
     #tts-btn:hover { color: var(--gold-400); background: rgba(240,192,64,0.08); }
     #tts-btn.active { color: var(--gold-400); }
@@ -576,6 +579,9 @@
       <div id="logo-fallback" class="title-logo-fallback">🚀 <span>GENESIS PIPE</span></div>
     </div>
     <div id="toggle-wrap">
+      <a id="timeline-btn" href="#" onclick="openTimeline(); return false;" title="Timeline Viewer">
+        <span class="material-icons">timeline</span>
+      </a>
       <button id="tts-btn" onclick="toggleTts()" title="音声読み上げ ON/OFF">
         <span class="material-icons" id="tts-icon">volume_off</span>
       </button>
@@ -918,6 +924,11 @@
     /* ══════════════════════════════════════════
        設定モーダル
     ══════════════════════════════════════════ */
+    function openTimeline() {
+      if (!webAppUrl) { alert('GAS URLを先に設定してください（⚙️ 設定から入力）'); return; }
+      window.open(webAppUrl + '?page=timeline', '_blank');
+    }
+
     function openSettings() {
       document.getElementById('settings-user-name').value = userName;
       document.getElementById('settings-ai-name').value   = aiName;
