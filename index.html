@@ -901,39 +901,51 @@
     })();
 
     /* ══════════════════════════════════════════
-       BGM — AudioContext + GainNode (iOS volume対応)
+       BGM — AudioBufferSource + GainNode (iOS音量調節完全対応)
+       <audio>要素は使わず fetch→decodeAudioData で再生
     ══════════════════════════════════════════ */
-    const bgmAudio = document.getElementById('bgm-audio');
-    let bgmPlaying = false;
-    let _bgmCtx = null;
-    let _bgmGain = null;
-    bgmAudio.addEventListener('error', function() {
-      const ctrl = document.getElementById('bgm-control');
-      ctrl.style.opacity = '0.35'; ctrl.style.pointerEvents = 'none';
-      ctrl.title = 'BGMファイルが設定されていません';
-    });
-    function _initBgmCtx() {
-      if (_bgmCtx) return;
-      try {
-        _bgmCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const src = _bgmCtx.createMediaElementSource(bgmAudio);
-        _bgmGain = _bgmCtx.createGain();
-        _bgmGain.gain.value = 0.08;
-        src.connect(_bgmGain);
-        _bgmGain.connect(_bgmCtx.destination);
-      } catch(e) { _bgmCtx = null; }
+    let bgmPlaying  = false;
+    let _bgmCtx     = null;
+    let _bgmGain    = null;
+    let _bgmBuffer  = null;
+    let _bgmSrc     = null;
+    let _bgmLoading = false;
+
+    async function toggleBgm() {
+      if (_bgmLoading) return;
+      const icon = document.getElementById('bgm-icon');
+      if (!bgmPlaying) {
+        _bgmLoading = true;
+        try {
+          if (!_bgmCtx) {
+            _bgmCtx  = new (window.AudioContext || window.webkitAudioContext)();
+            _bgmGain = _bgmCtx.createGain();
+            _bgmGain.gain.value = (parseInt(document.getElementById('bgm-slider').value) || 8) / 100;
+            _bgmGain.connect(_bgmCtx.destination);
+          }
+          if (_bgmCtx.state === 'suspended') await _bgmCtx.resume();
+          if (!_bgmBuffer) {
+            const resp = await fetch('./AI_PARTNER_SYNC_BGM.m4a');
+            if (!resp.ok) throw new Error('file not found');
+            _bgmBuffer = await _bgmCtx.decodeAudioData(await resp.arrayBuffer());
+          }
+          if (_bgmSrc) { try { _bgmSrc.stop(); } catch(e) {} }
+          _bgmSrc = _bgmCtx.createBufferSource();
+          _bgmSrc.buffer = _bgmBuffer; _bgmSrc.loop = true;
+          _bgmSrc.connect(_bgmGain); _bgmSrc.start(0);
+          bgmPlaying = true; icon.textContent = 'volume_up';
+        } catch(e) {
+          const ctrl = document.getElementById('bgm-control');
+          ctrl.style.opacity = '0.35'; ctrl.style.pointerEvents = 'none';
+          ctrl.title = 'BGMファイルが読み込めませんでした';
+        }
+        _bgmLoading = false;
+      } else {
+        if (_bgmSrc) { try { _bgmSrc.stop(); } catch(e) {} _bgmSrc = null; }
+        bgmPlaying = false; icon.textContent = 'volume_off';
+      }
     }
-    function toggleBgm() {
-      _initBgmCtx();
-      if (_bgmCtx && _bgmCtx.state === 'suspended') _bgmCtx.resume();
-      if (!bgmPlaying) { bgmAudio.play().catch(()=>{}); bgmPlaying=true; document.getElementById('bgm-icon').textContent='volume_up'; }
-      else { bgmAudio.pause(); bgmPlaying=false; document.getElementById('bgm-icon').textContent='volume_off'; }
-    }
-    function setBgmVolume(val) {
-      const v = val / 100;
-      if (_bgmGain) _bgmGain.gain.value = v;
-      else bgmAudio.volume = v;
-    }
+    function setBgmVolume(val) { if (_bgmGain) _bgmGain.gain.value = val / 100; }
     function toggleBgmSlider() {
       const slider=document.getElementById('bgm-slider'), btn=document.getElementById('bgm-slider-toggle');
       const isOpen=slider.classList.toggle('open');
