@@ -856,6 +856,8 @@
     let ttsPitch    = (_saved.ttsPitch   != null) ? _saved.ttsPitch : 0.0;
     let ttsEnabled  = false;
     let currentAudio = null;
+    let _ttsCtx = null;
+    let _ttsSrc = null;
     // 個人情報（生年月日・性別・APIキー）はGASのUserProperties（サイドバー）でのみ管理。
     // ブラウザには保存しない。GASがUserPropertiesから気質を読んでOracleに注入する。
 
@@ -899,21 +901,39 @@
     })();
 
     /* ══════════════════════════════════════════
-       BGM
+       BGM — AudioContext + GainNode (iOS volume対応)
     ══════════════════════════════════════════ */
     const bgmAudio = document.getElementById('bgm-audio');
-    bgmAudio.volume = 0.08;
     let bgmPlaying = false;
+    let _bgmCtx = null;
+    let _bgmGain = null;
     bgmAudio.addEventListener('error', function() {
       const ctrl = document.getElementById('bgm-control');
       ctrl.style.opacity = '0.35'; ctrl.style.pointerEvents = 'none';
       ctrl.title = 'BGMファイルが設定されていません';
     });
+    function _initBgmCtx() {
+      if (_bgmCtx) return;
+      try {
+        _bgmCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const src = _bgmCtx.createMediaElementSource(bgmAudio);
+        _bgmGain = _bgmCtx.createGain();
+        _bgmGain.gain.value = 0.08;
+        src.connect(_bgmGain);
+        _bgmGain.connect(_bgmCtx.destination);
+      } catch(e) { _bgmCtx = null; }
+    }
     function toggleBgm() {
+      _initBgmCtx();
+      if (_bgmCtx && _bgmCtx.state === 'suspended') _bgmCtx.resume();
       if (!bgmPlaying) { bgmAudio.play().catch(()=>{}); bgmPlaying=true; document.getElementById('bgm-icon').textContent='volume_up'; }
       else { bgmAudio.pause(); bgmPlaying=false; document.getElementById('bgm-icon').textContent='volume_off'; }
     }
-    function setBgmVolume(val) { bgmAudio.volume = val / 100; }
+    function setBgmVolume(val) {
+      const v = val / 100;
+      if (_bgmGain) _bgmGain.gain.value = v;
+      else bgmAudio.volume = v;
+    }
     function toggleBgmSlider() {
       const slider=document.getElementById('bgm-slider'), btn=document.getElementById('bgm-slider-toggle');
       const isOpen=slider.classList.toggle('open');
@@ -1354,15 +1374,29 @@ const btn = document.getElementById('settings-save-btn');
     initCompass();
   
     /* ── TTS ── */
+    function _getTtsCtx() {
+      if (!_ttsCtx) _ttsCtx = new (window.AudioContext || window.webkitAudioContext)();
+      return _ttsCtx;
+    }
+
     function toggleTts() {
       ttsEnabled = !ttsEnabled;
       const btn = document.getElementById('tts-btn');
       const icon = document.getElementById('tts-icon');
       if (ttsEnabled) {
+        // iOS Safari: AudioContextをユーザージェスチャー内で起動してaudio再生を解禁
+        try {
+          const ctx = _getTtsCtx();
+          if (ctx.state === 'suspended') ctx.resume();
+          const buf = ctx.createBuffer(1, 1, 22050);
+          const s = ctx.createBufferSource(); s.buffer = buf;
+          s.connect(ctx.destination); s.start(0);
+        } catch(e) {}
         icon.textContent = 'record_voice_over'; btn.classList.add('active');
         addBubble('🔊 音声読み上げ ON', 'system');
       } else {
         icon.textContent = 'voice_over_off'; btn.classList.remove('active');
+        if (_ttsSrc) { try { _ttsSrc.stop(); } catch(e) {} _ttsSrc = null; }
         if (currentAudio) { currentAudio.pause(); currentAudio = null; }
         window.speechSynthesis && window.speechSynthesis.cancel();
         addBubble('🔇 音声読み上げ OFF', 'system');
@@ -1383,9 +1417,23 @@ const btn = document.getElementById('settings-save-btn');
       .then(r => r.json())
       .then(data => {
         if (data.audioContent) {
-          currentAudio = new Audio('data:audio/mp3;base64,' + data.audioContent);
-          currentAudio.play().catch(() => fallbackSpeak(plain));
-          currentAudio.onended = () => { currentAudio = null; };
+          // AudioContext経由で再生（iOS Safariのautoplay制限を回避）
+          try {
+            const ctx = _getTtsCtx();
+            const bytes = Uint8Array.from(atob(data.audioContent), c => c.charCodeAt(0));
+            ctx.decodeAudioData(bytes.buffer, function(buffer) {
+              if (_ttsSrc) { try { _ttsSrc.stop(); } catch(e) {} }
+              _ttsSrc = ctx.createBufferSource();
+              _ttsSrc.buffer = buffer;
+              _ttsSrc.connect(ctx.destination);
+              _ttsSrc.start(0);
+              _ttsSrc.onended = function() { _ttsSrc = null; };
+            }, function() { fallbackSpeak(plain); });
+          } catch(e) {
+            currentAudio = new Audio('data:audio/mp3;base64,' + data.audioContent);
+            currentAudio.play().catch(() => fallbackSpeak(plain));
+            currentAudio.onended = () => { currentAudio = null; };
+          }
         } else { fallbackSpeak(plain); }
       })
       .catch(() => fallbackSpeak(plain));
