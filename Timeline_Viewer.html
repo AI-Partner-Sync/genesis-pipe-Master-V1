@@ -1,448 +1,508 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Genesis Pipe — Timeline</title>
-  <style>
-    :root {
-      --annual-color:  #7C3AED;
-      --monthly-color: #0EA5E9;
-      --weekly-color:  #10B981;
-      --daily-color:   #94A3B8;
-      --bg: #020817;
-      --surface: #0d1526;
-      --border: #1e3a6e;
-      --text: #e8edf8;
-      --muted: #8899bb;
-      --gold: #f0c040;
-    }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI Partner Sync — Master Timeline Viewer</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --navy-950: #0a0f1e;
+  --navy-900: #0f172a;
+  --navy-800: #1e293b;
+  --navy-700: #334155;
+  --gold: #f59e0b;
+  --annual-c: #a855f7;
+  --monthly-c: #38bdf8;
+  --weekly-c: #34d399;
+  --daily-c: #94a3b8;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--navy-950);
+  color: #e2e8f0;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  min-height: 100vh;
+}
 
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+/* ヘッダー */
+header {
+  background: var(--navy-900);
+  border-bottom: 1px solid var(--navy-700);
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.header-left { display: flex; align-items: center; gap: 12px; }
+.logo { width: 40px; height: 40px; border-radius: 8px; object-fit: contain; flex-shrink: 0; }
+header h1 { font-size: 16px; font-weight: 700; color: var(--gold); letter-spacing: 0.05em; }
+.subtitle { font-size: 11px; color: #475569; margin-top: 2px; }
+.header-right { font-size: 11px; color: #475569; }
 
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: -apple-system, 'Hiragino Sans', sans-serif;
-      min-height: 100vh;
-    }
+/* グラフエリア */
+.chart-section {
+  padding: 20px 24px;
+  background: var(--navy-900);
+  border-bottom: 1px solid var(--navy-700);
+}
+.section-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--gold);
+  letter-spacing: 0.1em;
+  margin-bottom: 10px;
+}
+.chart-wrapper { position: relative; height: 150px; }
 
-    /* ── ヘッダー ── */
-    header {
-      position: sticky;
-      top: 0;
-      z-index: 100;
-      background: rgba(2,8,23,0.92);
-      backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--border);
-      padding: 12px 16px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      flex-wrap: wrap;
-    }
+/* フィルターバー */
+.filter-bar {
+  padding: 12px 24px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  background: var(--navy-900);
+  border-bottom: 1px solid var(--navy-700);
+  position: sticky;
+  top: 61px;
+  z-index: 99;
+}
+.filter-btn {
+  padding: 5px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--navy-700);
+  background: transparent;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  letter-spacing: 0.03em;
+}
+.filter-btn:hover { border-color: var(--gold); color: var(--gold); }
+.filter-btn.all.active     { background: var(--gold);      border-color: var(--gold);      color: var(--navy-950); }
+.filter-btn.annual.active  { background: var(--annual-c);  border-color: var(--annual-c);  color: #fff; }
+.filter-btn.monthly.active { background: var(--monthly-c); border-color: var(--monthly-c); color: var(--navy-950); }
+.filter-btn.weekly.active  { background: var(--weekly-c);  border-color: var(--weekly-c);  color: var(--navy-950); }
+.filter-btn.daily.active   { background: var(--daily-c);   border-color: var(--daily-c);   color: var(--navy-950); }
 
-    .back-btn {
-      background: none;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      color: var(--muted);
-      font-size: 12px;
-      padding: 6px 12px;
-      cursor: pointer;
-      transition: all 0.2s;
-      white-space: nowrap;
-      flex-shrink: 0;
-    }
-    .back-btn:hover { color: var(--gold); border-color: var(--gold); }
+/* タイムライン */
+.timeline {
+  padding: 28px 24px 100px;
+  position: relative;
+  max-width: 860px;
+  margin: 0 auto;
+}
+.timeline::before {
+  content: '';
+  position: absolute;
+  left: 48px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(to bottom, var(--gold) 0%, rgba(245,158,11,0.1) 60%, transparent 100%);
+}
 
-    .header-title {
-      font-size: 14px;
-      font-weight: 700;
-      color: var(--gold);
-      letter-spacing: 0.06em;
-      white-space: nowrap;
-    }
+/* エントリー */
+.entry {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+  opacity: 0;
+  transform: translateY(10px);
+  animation: fadeUp 0.35s ease forwards;
+}
+@keyframes fadeUp { to { opacity: 1; transform: translateY(0); } }
 
-    .filters {
-      display: flex;
-      gap: 6px;
-      flex-wrap: wrap;
-    }
+/* ドット */
+.dot-wrap {
+  flex-shrink: 0;
+  width: 40px;
+  display: flex;
+  justify-content: center;
+  padding-top: 16px;
+  position: relative;
+  z-index: 1;
+}
+.dot {
+  border-radius: 50%;
+  border: 2px solid;
+  background: var(--navy-950);
+}
+.dot.Annual  { width: 18px; height: 18px; border-color: var(--annual-c);  box-shadow: 0 0 10px var(--annual-c); }
+.dot.Monthly { width: 14px; height: 14px; border-color: var(--monthly-c); box-shadow: 0 0 6px var(--monthly-c); }
+.dot.Weekly  { width: 11px; height: 11px; border-color: var(--weekly-c); }
+.dot.Daily   { width: 8px;  height: 8px;  border-color: var(--daily-c); }
 
-    .filter-btn {
-      padding: 4px 12px;
-      border-radius: 20px;
-      border: 1px solid var(--border);
-      background: transparent;
-      color: var(--muted);
-      font-size: 12px;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    .filter-btn[data-level="all"].active    { color: var(--text);           border-color: var(--text);           background: rgba(232,237,248,0.08); }
-    .filter-btn[data-level="Annual"].active  { color: var(--annual-color);  border-color: var(--annual-color);  background: rgba(124,58,237,0.15); }
-    .filter-btn[data-level="Monthly"].active { color: var(--monthly-color); border-color: var(--monthly-color); background: rgba(14,165,233,0.15); }
-    .filter-btn[data-level="Weekly"].active  { color: var(--weekly-color);  border-color: var(--weekly-color);  background: rgba(16,185,129,0.15); }
-    .filter-btn[data-level="Daily"].active   { color: var(--daily-color);   border-color: var(--daily-color);   background: rgba(148,163,184,0.12); }
+/* カード */
+.card {
+  flex: 1;
+  background: var(--navy-800);
+  border-radius: 10px;
+  border-left: 3px solid;
+  padding: 12px 16px;
+  min-width: 0;
+  transition: box-shadow 0.3s;
+}
+.card.Annual  { border-left-color: var(--annual-c); }
+.card.Monthly { border-left-color: var(--monthly-c); }
+.card.Weekly  { border-left-color: var(--weekly-c); }
+.card.Daily   { border-left-color: var(--daily-c); }
+.card.highlight { box-shadow: 0 0 0 2px var(--gold); }
 
-    .header-right {
-      margin-left: auto;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex-shrink: 0;
-    }
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.badge {
+  font-size: 9px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 8px;
+  letter-spacing: 0.06em;
+}
+.badge.Annual  { background: var(--annual-c);  color: #fff; }
+.badge.Monthly { background: var(--monthly-c); color: var(--navy-950); }
+.badge.Weekly  { background: var(--weekly-c);  color: var(--navy-950); }
+.badge.Daily   { background: var(--daily-c);   color: var(--navy-950); }
 
-    .count-label {
-      font-size: 12px;
-      color: var(--muted);
-    }
+.card-date  { font-size: 12px; color: #64748b; }
+.date-range { font-size: 10px; color: #475569; }
 
-    /* ── エラー/未設定バナー ── */
-    #notice {
-      display: none;
-      margin: 20px auto;
-      max-width: 500px;
-      padding: 20px 24px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      text-align: center;
-      font-size: 13px;
-      color: var(--muted);
-      line-height: 1.7;
-    }
-    #notice a {
-      color: var(--gold);
-      text-decoration: underline;
-      text-underline-offset: 2px;
-      cursor: pointer;
-    }
+.emotion-pill {
+  margin-left: auto;
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.eg  { background: rgba(245,158,11,0.15); color: #f59e0b; }
+.eg2 { background: rgba(52,211,153,0.15); color: #34d399; }
+.eg3 { background: rgba(251,146,60,0.15); color: #fb923c; }
+.eg4 { background: rgba(248,113,113,0.15);color: #f87171; }
 
-    /* ── タイムライン ── */
-    #timeline {
-      max-width: 740px;
-      margin: 0 auto;
-      padding: 36px 20px 80px;
-      position: relative;
-    }
+.summary {
+  font-size: 13px;
+  color: #cbd5e1;
+  line-height: 1.65;
+  margin-bottom: 6px;
+}
 
-    #timeline::before {
-      content: '';
-      position: absolute;
-      left: 36px;
-      top: 0; bottom: 0;
-      width: 2px;
-      background: linear-gradient(to bottom, transparent, var(--border) 4%, var(--border) 96%, transparent);
-    }
+.toggle-btn {
+  font-size: 11px;
+  color: #475569;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: color 0.15s;
+}
+.toggle-btn:hover { color: var(--gold); }
 
-    .entry {
-      position: relative;
-      padding-left: 64px;
-      margin-bottom: 20px;
-      animation: fadeIn 0.35s ease both;
-    }
+.detail {
+  display: none;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--navy-700);
+}
+.detail.open { display: block; }
 
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(10px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
+.detail-row { margin-bottom: 10px; }
+.detail-label {
+  font-size: 9px;
+  color: #475569;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  margin-bottom: 4px;
+}
+.detail-value { font-size: 12px; color: #94a3b8; line-height: 1.6; }
 
-    .dot {
-      position: absolute;
-      left: 27px;
-      top: 15px;
-      width: 16px;
-      height: 16px;
-      border-radius: 50%;
-      border: 2px solid var(--bg);
-    }
+.kw-wrap { display: flex; flex-wrap: wrap; gap: 4px; }
+.kw { font-size: 10px; padding: 2px 7px; background: var(--navy-700); border-radius: 6px; color: #94a3b8; }
 
-    .entry[data-level="Annual"]  .dot { background: var(--annual-color); }
-    .entry[data-level="Monthly"] .dot { background: var(--monthly-color); }
-    .entry[data-level="Weekly"]  .dot { background: var(--weekly-color); }
-    .entry[data-level="Daily"]   .dot { background: var(--daily-color); }
-
-    .card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 14px 18px;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .card::before {
-      content: '';
-      position: absolute;
-      left: 0; top: 0; bottom: 0;
-      width: 3px;
-    }
-
-    .entry[data-level="Annual"]  .card::before { background: var(--annual-color); }
-    .entry[data-level="Monthly"] .card::before { background: var(--monthly-color); }
-    .entry[data-level="Weekly"]  .card::before { background: var(--weekly-color); }
-    .entry[data-level="Daily"]   .card::before { background: var(--daily-color); }
-
-    .entry[data-level="Annual"]  .card { padding: 18px 22px; }
-    .entry[data-level="Monthly"] .card { padding: 16px 20px; }
-
-    .card-header {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 10px;
-    }
-
-    .level-badge {
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 0.07em;
-      padding: 2px 8px;
-      border-radius: 10px;
-      text-transform: uppercase;
-    }
-
-    .entry[data-level="Annual"]  .level-badge { background: rgba(124,58,237,0.2);  color: #a78bfa; }
-    .entry[data-level="Monthly"] .level-badge { background: rgba(14,165,233,0.2);  color: #38bdf8; }
-    .entry[data-level="Weekly"]  .level-badge { background: rgba(16,185,129,0.2);  color: #34d399; }
-    .entry[data-level="Daily"]   .level-badge { background: rgba(148,163,184,0.15); color: #94a3b8; }
-
-    .date-label {
-      font-size: 11px;
-      color: var(--muted);
-      font-family: monospace;
-    }
-
-    .summary-text {
-      font-size: 13px;
-      line-height: 1.75;
-      color: var(--text);
-      margin-bottom: 8px;
-    }
-
-    /* ── ログ展開セクション ── */
-    .log-section {
-      border-top: 1px solid var(--border);
-      padding-top: 8px;
-      margin-top: 4px;
-    }
-
-    .log-toggle {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      font-size: 11px;
-      color: var(--muted);
-      cursor: pointer;
-      background: none;
-      border: none;
-      padding: 0;
-      margin-bottom: 4px;
-      transition: color 0.2s;
-    }
-    .log-toggle:hover { color: var(--gold); }
-
-    .log-text {
-      font-size: 12px;
-      line-height: 1.7;
-      color: var(--muted);
-      white-space: pre-wrap;
-      display: none;
-    }
-    .log-text.open { display: block; }
-
-    /* ── ローディング ── */
-    #loading {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 300px;
-      gap: 14px;
-      color: var(--muted);
-    }
-
-    .spinner {
-      width: 32px; height: 32px;
-      border: 3px solid var(--border);
-      border-top-color: var(--gold);
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-    }
-
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    .empty {
-      text-align: center;
-      color: var(--muted);
-      padding: 60px 20px;
-      font-size: 14px;
-    }
-  </style>
+.loading, .empty {
+  text-align: center;
+  padding: 80px 20px;
+  color: #475569;
+  font-size: 14px;
+  line-height: 2;
+}
+.spinner {
+  width: 32px; height: 32px;
+  border: 3px solid var(--navy-700);
+  border-top-color: var(--gold);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto 16px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
 </head>
 <body>
 
 <header>
-  <button class="back-btn" onclick="goBack()">← チャット</button>
-  <span class="header-title">⏱ Genesis Timeline</span>
-  <div class="filters">
-    <button class="filter-btn active" data-level="all"     onclick="setFilter('all')">ALL</button>
-    <button class="filter-btn"        data-level="Annual"  onclick="setFilter('Annual')">Annual</button>
-    <button class="filter-btn"        data-level="Monthly" onclick="setFilter('Monthly')">Monthly</button>
-    <button class="filter-btn"        data-level="Weekly"  onclick="setFilter('Weekly')">Weekly</button>
-    <button class="filter-btn"        data-level="Daily"   onclick="setFilter('Daily')">Daily</button>
+  <div class="header-left">
+    <img src="Genesis_pipe_Logo.png" class="logo" alt="logo" onerror="this.style.display='none'">
+    <div>
+      <h1>AI Partner Sync</h1>
+      <div class="subtitle">Master Timeline — Growth Record</div>
+    </div>
   </div>
-  <div class="header-right">
-    <span class="count-label" id="count-label"></span>
-  </div>
+  <div class="header-right" id="entry-count"></div>
 </header>
 
-<div id="notice"></div>
+<div class="chart-section">
+  <div class="section-label">DAILY EMOTION ARC</div>
+  <div class="chart-wrapper">
+    <canvas id="emotionChart"></canvas>
+  </div>
+</div>
 
-<div id="timeline">
-  <div id="loading">
+<div class="filter-bar">
+  <button class="filter-btn all active" onclick="setFilter('ALL')">ALL</button>
+  <button class="filter-btn annual"     onclick="setFilter('Annual')">Annual</button>
+  <button class="filter-btn monthly"    onclick="setFilter('Monthly')">Monthly</button>
+  <button class="filter-btn weekly"     onclick="setFilter('Weekly')">Weekly</button>
+  <button class="filter-btn daily"      onclick="setFilter('Daily')">Daily</button>
+</div>
+
+<div class="timeline" id="timeline">
+  <div class="loading">
     <div class="spinner"></div>
-    <span>Genesis ログを読み込み中...</span>
+    データを読み込み中...
   </div>
 </div>
 
 <script>
-  const GP_STORAGE_KEY = 'gp_public_v1';
-  let allEntries = [];
-  let currentFilter = 'all';
+// ★ G_Timeline.gsをデプロイ後、ここにWebApp URLを貼り付けてください
+const GAS_API_URL = 'https://script.google.com/macros/s/AKfycby45pWuHOr7mmtoFTX0Vj5DTkmXYPXHixUxZckXhwqsk5cD7wfYwA6D9ShNxOutdhNu/exec';
 
-  function loadStorage() {
-    try { return JSON.parse(localStorage.getItem(GP_STORAGE_KEY) || '{}'); } catch(e) { return {}; }
-  }
+let allEntries = [];
+let currentFilter = 'ALL';
+let emotionChart = null;
 
-  // ── 初期化 ──────────────────────────────────
-  window.onload = function() {
-    const gasUrl = loadStorage().webAppUrl || '';
-    if (!gasUrl || !gasUrl.includes('/macros/s/')) {
-      showNotice(
-        'Genesis Pipe の GAS URL が未設定です。<br>' +
-        '<a onclick="goBack()">← チャット画面</a> の ⚙️ 設定から GAS URL を入力してください。'
-      );
-      return;
-    }
-    loadData(gasUrl);
-  };
-
-  function loadData(gasUrl) {
-    fetch(gasUrl + '?page=timeline_data', { redirect: 'follow' })
-      .then(function(r) {
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        return r.json();
-      })
-      .then(onDataLoaded)
-      .catch(function(e) {
-        document.getElementById('loading').innerHTML =
-          '<p style="color:#f87171;text-align:center;padding:20px;">' +
-          '読み込みエラー: ' + (e.message || String(e)) + '<br><br>' +
-          '<span style="font-size:11px;color:var(--muted)">GAS を再デプロイしてから試してください</span></p>';
-      });
-  }
-
-  function onDataLoaded(rawData) {
-    // Genesis Pipe 形式 → 表示形式に変換
-    // rawData: [{date, stamp, type, log, summary}]
-    const raw = Array.isArray(rawData) ? rawData
-      : (typeof rawData === 'string' ? JSON.parse(rawData) : []);
-
-    allEntries = raw.map(function(e) {
-      return {
-        level:  e.type === 'Yearly' ? 'Annual' : (e.type || 'Daily'),
-        date:   e.date || '',
-        stamp:  (e.stamp || '').replace(/^(Daily|Weekly|Monthly|Yearly)_/, ''),
-        text:   e.log || '',
-      };
-    });
-
+async function loadData() {
+  try {
+    const sep = GAS_API_URL.includes('?') ? '&' : '?';
+    const res = await fetch(GAS_API_URL + sep + 'page=timeline_data');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    allEntries = Array.isArray(data) ? data : [];
+    buildChart(allEntries.filter(e => e.level === 'Daily'));
     render();
+    document.getElementById('entry-count').textContent = allEntries.length + ' entries';
+  } catch(err) {
+    document.getElementById('timeline').innerHTML =
+      `<div class="empty">データ取得に失敗しました。<br>
+      <small style="color:#334155">${err.message}</small><br><br>
+      <small>index.html の GAS_API_URL を設定してください。</small></div>`;
+    console.error(err);
+  }
+}
+
+function setFilter(f) {
+  currentFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => {
+    const cls = [...b.classList].find(c => c !== 'filter-btn' && c !== 'active') || '';
+    const match = (f === 'ALL' && cls === 'all') || cls === f.toLowerCase();
+    b.classList.toggle('active', match);
+  });
+  render();
+}
+
+function render() {
+  const entries = currentFilter === 'ALL'
+    ? allEntries
+    : allEntries.filter(e => e.level === currentFilter);
+
+  const tl = document.getElementById('timeline');
+  if (!entries.length) {
+    tl.innerHTML = '<div class="empty">表示できるデータがありません</div>';
+    return;
+  }
+  tl.innerHTML = entries.map((e, i) => buildCard(e, i, allEntries.indexOf(e))).join('');
+}
+
+function buildCard(e, animIdx, globalIdx) {
+  const delay = Math.min(animIdx * 35, 600);
+
+  // 感情ピル（Daily のみ）
+  let pillHtml = '';
+  if (e.level === 'Daily' && e.score) {
+    const cls = e.score >= 500 ? 'eg' : e.score >= 350 ? 'eg2' : e.score >= 200 ? 'eg3' : 'eg4';
+    pillHtml = `<span class="emotion-pill ${cls}">${esc(e.emotion)} ${e.score}</span>`;
   }
 
-  function showNotice(html) {
-    document.getElementById('loading').style.display = 'none';
-    const n = document.getElementById('notice');
-    n.innerHTML = html;
-    n.style.display = 'block';
-  }
+  const dateHtml = e.date_range
+    ? `<span class="card-date">${esc(e.date)}</span><span class="date-range"> ${esc(e.date_range)}</span>`
+    : `<span class="card-date">${esc(e.date)}</span>`;
 
-  function goBack() {
-    window.location.href = './index.html';
-  }
+  const fields = [
+    ['INSIGHT',      e.insight],
+    ['KEYSTONE',     e.keystone],
+    ['TOP3 ACTUAL',  e.top3_actual],
+    ['TOP3 PLAN',    e.top3_plan],
+    ['ACTIONS',      e.actions],
+    ['TEACHING',     e.teaching],
+    ['BREAKTHROUGH', e.major_breakthrough],
+    ['IDENTITY',     e.identity_evolution],
+    ['PHILOSOPHY',   e.year_philosophy],
+    ['LEGACY',       e.legacy_testament],
+    ['APHORISM',     e.aphorism],
+  ].filter(([, v]) => v);
 
-  // ── フィルター ───────────────────────────────
-  function setFilter(level) {
-    currentFilter = level;
-    document.querySelectorAll('.filter-btn').forEach(function(btn) {
-      btn.classList.toggle('active', btn.dataset.level === level);
-    });
-    render();
-  }
+  const detailRows = fields.map(([label, val]) =>
+    `<div class="detail-row">
+      <div class="detail-label">${label}</div>
+      <div class="detail-value">${esc(val)}</div>
+    </div>`
+  ).join('');
 
-  // ── レンダリング ─────────────────────────────
-  function render() {
-    const container = document.getElementById('timeline');
-    const filtered = currentFilter === 'all'
-      ? allEntries
-      : allEntries.filter(function(e) { return e.level === currentFilter; });
+  const kwHtml = e.keywords
+    ? `<div class="detail-row">
+        <div class="detail-label">KEYWORDS</div>
+        <div class="kw-wrap">${
+          e.keywords.split(/[,\s　]+/).filter(k => k)
+            .map(k => `<span class="kw">${esc(k)}</span>`).join('')
+        }</div>
+      </div>`
+    : '';
 
-    document.getElementById('count-label').textContent = filtered.length + ' 件';
+  const hasDetail = fields.length > 0 || e.keywords;
 
-    if (filtered.length === 0) {
-      container.innerHTML = '<div class="empty">該当するログがありません</div>';
-      return;
+  return `
+<div class="entry" id="entry-${globalIdx}" style="animation-delay:${delay}ms">
+  <div class="dot-wrap"><div class="dot ${e.level}"></div></div>
+  <div class="card ${e.level}">
+    <div class="card-header">
+      <span class="badge ${e.level}">${e.level.toUpperCase()}</span>
+      ${dateHtml}
+      ${pillHtml}
+    </div>
+    <div class="summary">${esc(e.summary)}</div>
+    ${hasDetail ? `
+    <button class="toggle-btn" onclick="toggleDetail(${globalIdx},this)">▶ 詳細を見る</button>
+    <div class="detail" id="detail-${globalIdx}">
+      ${detailRows}${kwHtml}
+    </div>` : ''}
+  </div>
+</div>`;
+}
+
+function toggleDetail(id, btn) {
+  const el = document.getElementById('detail-' + id);
+  const open = el.classList.toggle('open');
+  btn.textContent = open ? '▼ 閉じる' : '▶ 詳細を見る';
+}
+
+function buildChart(dailyEntries) {
+  const sorted = [...dailyEntries]
+    .filter(e => e.date)
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  if (!sorted.length) return;
+
+  const labels = sorted.map(e => e.date.substring(5));
+  const scores = sorted.map(e => e.score || 0);
+  const pointColors = scores.map(s =>
+    s >= 500 ? '#f59e0b' : s >= 350 ? '#34d399' : s >= 200 ? '#fb923c' : '#f87171'
+  );
+
+  const ctx = document.getElementById('emotionChart').getContext('2d');
+  if (emotionChart) emotionChart.destroy();
+
+  emotionChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        data: scores,
+        borderColor: 'rgba(245,158,11,0.7)',
+        backgroundColor: (context) => {
+          const grad = context.chart.ctx.createLinearGradient(0, 0, 0, 150);
+          grad.addColorStop(0, 'rgba(245,158,11,0.15)');
+          grad.addColorStop(1, 'rgba(245,158,11,0)');
+          return grad;
+        },
+        pointBackgroundColor: pointColors,
+        pointBorderColor: pointColors,
+        pointRadius: 4,
+        pointHoverRadius: 7,
+        tension: 0.35,
+        fill: true,
+        borderWidth: 2,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1e293b',
+          titleColor: '#94a3b8',
+          bodyColor: '#e2e8f0',
+          callbacks: {
+            title: (items) => sorted[items[0].dataIndex].date,
+            label: (item) => {
+              const e = sorted[item.dataIndex];
+              return ` ${e.emotion || '—'} (${e.score})`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { color: '#475569', font: { size: 9 }, maxTicksLimit: 12, maxRotation: 0 },
+          grid:  { color: 'rgba(51,65,85,0.4)' },
+          border: { color: 'transparent' }
+        },
+        y: {
+          min: 0, max: 1200,
+          ticks: { color: '#475569', font: { size: 9 }, stepSize: 200 },
+          grid:  { color: 'rgba(51,65,85,0.4)' },
+          border: { color: 'transparent' }
+        }
+      },
+      onClick: (evt, elements) => {
+        if (!elements.length) return;
+        const target = sorted[elements[0].index];
+        const entryIdx = allEntries.findIndex(
+          e => e.date === target.date && e.level === 'Daily'
+        );
+        if (entryIdx < 0) return;
+        if (currentFilter !== 'ALL' && currentFilter !== 'Daily') setFilter('Daily');
+        setTimeout(() => {
+          const el = document.getElementById('entry-' + entryIdx);
+          if (!el) return;
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          const card = el.querySelector('.card');
+          card.classList.add('highlight');
+          setTimeout(() => card.classList.remove('highlight'), 1800);
+        }, 120);
+      }
     }
+  });
+}
 
-    container.innerHTML = filtered.map(function(e, i) { return buildCard(e, i); }).join('');
-  }
+function esc(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/\n/g, '<br>');
+}
 
-  // ── カード生成 ───────────────────────────────
-  function buildCard(e, i) {
-    const delay   = Math.min(i * 25, 500);
-    const logId   = 'log-' + i;
-    const preview = e.text.replace(/^[^\n]*\n+/, '').substring(0, 120);
-    const full    = e.text;
-
-    return '<div class="entry" data-level="' + e.level + '" style="animation-delay:' + delay + 'ms">' +
-      '<div class="dot"></div>' +
-      '<div class="card">' +
-        '<div class="card-header">' +
-          '<span class="level-badge">' + e.level + '</span>' +
-          '<span class="date-label">' + esc(e.stamp || e.date) + '</span>' +
-        '</div>' +
-        (preview ? '<p class="summary-text">' + esc(preview) + (full.length > 120 ? '…' : '') + '</p>' : '') +
-        (full ? (
-          '<div class="log-section">' +
-            '<button class="log-toggle" onclick="toggleLog(\'' + logId + '\',this)">' +
-              '▶ 全文を表示' +
-            '</button>' +
-            '<p class="log-text" id="' + logId + '">' + esc(full) + '</p>' +
-          '</div>'
-        ) : '') +
-      '</div>' +
-    '</div>';
-  }
-
-  function toggleLog(id, btn) {
-    const el = document.getElementById(id);
-    if (el.classList.toggle('open')) {
-      btn.textContent = '▼ 閉じる';
-    } else {
-      btn.textContent = '▶ 全文を表示';
-    }
-  }
-
-  function esc(str) {
-    return String(str || '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/\n/g, '<br>');
-  }
+window.onload = loadData;
 </script>
 </body>
 </html>

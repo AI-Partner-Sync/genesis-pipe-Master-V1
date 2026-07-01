@@ -3,506 +3,411 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>AI Partner Sync — Master Timeline</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<title>AI Partner Sync — Master</title>
 <style>
+@property --ta {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
 :root {
   --navy-950: #0a0f1e;
   --navy-900: #0f172a;
   --navy-800: #1e293b;
   --navy-700: #334155;
   --gold: #f59e0b;
-  --annual-c: #a855f7;
-  --monthly-c: #38bdf8;
-  --weekly-c: #34d399;
-  --daily-c: #94a3b8;
+  --gold-dim: rgba(245,158,11,0.15);
 }
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
+
 body {
   background: var(--navy-950);
   color: #e2e8f0;
   font-family: 'Segoe UI', system-ui, sans-serif;
   min-height: 100vh;
+  overflow-x: hidden;
+  position: relative;
 }
 
-/* ヘッダー */
+/* Aurora overlay */
+.aurora {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse 60% 40% at 20% 20%, rgba(245,158,11,0.06) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 60% at 80% 70%, rgba(168,85,247,0.05) 0%, transparent 60%),
+    radial-gradient(ellipse 70% 40% at 50% 90%, rgba(56,189,248,0.04) 0%, transparent 60%);
+}
+
+/* Synapse canvas */
+#synapse {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.25;
+}
+
+/* Main layout */
+.main {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header */
 header {
-  background: var(--navy-900);
-  border-bottom: 1px solid var(--navy-700);
-  padding: 14px 24px;
+  padding: 20px 32px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  border-bottom: 1px solid rgba(51,65,85,0.5);
+  background: rgba(10,15,30,0.8);
+  backdrop-filter: blur(12px);
   position: sticky;
   top: 0;
   z-index: 100;
 }
-.header-left { display: flex; align-items: center; gap: 12px; }
-.logo { width: 32px; height: 32px; border-radius: 8px; }
-header h1 { font-size: 16px; font-weight: 700; color: var(--gold); letter-spacing: 0.05em; }
-.subtitle { font-size: 11px; color: #475569; margin-top: 2px; }
-.header-right { font-size: 11px; color: #475569; }
-
-/* グラフエリア */
-.chart-section {
-  padding: 20px 24px;
-  background: var(--navy-900);
-  border-bottom: 1px solid var(--navy-700);
+.header-left { display: flex; align-items: center; gap: 14px; }
+.logo {
+  width: 44px; height: 44px;
+  border-radius: 10px;
+  object-fit: contain;
+  flex-shrink: 0;
 }
-.section-label {
-  font-size: 10px;
-  font-weight: 700;
+.brand-name {
+  font-size: 18px;
+  font-weight: 800;
   color: var(--gold);
-  letter-spacing: 0.1em;
-  margin-bottom: 10px;
+  letter-spacing: 0.05em;
 }
-.chart-wrapper { position: relative; height: 150px; }
-
-/* フィルターバー */
-.filter-bar {
-  padding: 12px 24px;
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  background: var(--navy-900);
-  border-bottom: 1px solid var(--navy-700);
-  position: sticky;
-  top: 61px;
-  z-index: 99;
-}
-.filter-btn {
-  padding: 5px 14px;
-  border-radius: 20px;
-  border: 1px solid var(--navy-700);
-  background: transparent;
-  color: #64748b;
+.brand-sub {
   font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s;
-  letter-spacing: 0.03em;
+  color: #475569;
+  margin-top: 2px;
+  letter-spacing: 0.08em;
 }
-.filter-btn:hover { border-color: var(--gold); color: var(--gold); }
-.filter-btn.all.active     { background: var(--gold);      border-color: var(--gold);      color: var(--navy-950); }
-.filter-btn.annual.active  { background: var(--annual-c);  border-color: var(--annual-c);  color: #fff; }
-.filter-btn.monthly.active { background: var(--monthly-c); border-color: var(--monthly-c); color: var(--navy-950); }
-.filter-btn.weekly.active  { background: var(--weekly-c);  border-color: var(--weekly-c);  color: var(--navy-950); }
-.filter-btn.daily.active   { background: var(--daily-c);   border-color: var(--daily-c);   color: var(--navy-950); }
+.version-badge {
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(245,158,11,0.3);
+  color: var(--gold);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
 
-/* タイムライン */
-.timeline {
-  padding: 28px 24px 100px;
-  position: relative;
-  max-width: 860px;
-  margin: 0 auto;
+/* Hero section */
+.hero {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 24px;
+  text-align: center;
 }
-.timeline::before {
+
+.hero-logo {
+  width: 88px; height: 88px;
+  border-radius: 20px;
+  object-fit: contain;
+  margin-bottom: 28px;
+  filter: drop-shadow(0 0 24px rgba(245,158,11,0.3));
+}
+
+.hero-title {
+  font-size: clamp(28px, 5vw, 42px);
+  font-weight: 800;
+  color: #f1f5f9;
+  line-height: 1.2;
+  margin-bottom: 12px;
+  letter-spacing: -0.02em;
+}
+.hero-title span {
+  background: linear-gradient(135deg, var(--gold) 0%, #fcd34d 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.hero-desc {
+  font-size: 15px;
+  color: #64748b;
+  max-width: 480px;
+  line-height: 1.7;
+  margin-bottom: 48px;
+}
+
+/* CTAボタン群 */
+.cta-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  max-width: 360px;
+}
+
+/* Timeline Viewer メインボタン（スピニングボーダー） */
+.btn-timeline {
+  position: relative;
+  width: 100%;
+  padding: 16px 32px;
+  border-radius: 14px;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--navy-950);
+  background: linear-gradient(135deg, var(--gold) 0%, #fcd34d 100%);
+  letter-spacing: 0.03em;
+  transition: transform 0.15s, box-shadow 0.15s;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.btn-timeline::before {
   content: '';
   position: absolute;
-  left: 48px;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  background: linear-gradient(to bottom, var(--gold) 0%, rgba(245,158,11,0.1) 60%, transparent 100%);
+  inset: -2px;
+  border-radius: 16px;
+  background: conic-gradient(from var(--ta), var(--gold), #a855f7, #38bdf8, var(--gold));
+  animation: spin-border 3s linear infinite;
+  z-index: -1;
 }
-
-/* エントリー */
-.entry {
-  display: flex;
-  gap: 16px;
-  margin-bottom: 16px;
-  opacity: 0;
-  transform: translateY(10px);
-  animation: fadeUp 0.35s ease forwards;
+@keyframes spin-border { to { --ta: 360deg; } }
+.btn-timeline:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(245,158,11,0.4);
 }
-@keyframes fadeUp { to { opacity: 1; transform: translateY(0); } }
+.btn-icon { font-size: 20px; }
 
-/* ドット */
-.dot-wrap {
-  flex-shrink: 0;
-  width: 40px;
+/* サブボタン */
+.btn-sub {
+  width: 100%;
+  padding: 12px 24px;
+  border-radius: 10px;
+  border: 1px solid var(--navy-700);
+  background: rgba(30,41,59,0.6);
+  color: #94a3b8;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
   display: flex;
+  align-items: center;
   justify-content: center;
-  padding-top: 16px;
+  gap: 8px;
+  transition: all 0.15s;
+  backdrop-filter: blur(8px);
+}
+.btn-sub:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+  background: var(--gold-dim);
+}
+.btn-sub.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+.coming-soon {
+  font-size: 9px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--navy-700);
+  color: #64748b;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  margin-left: 4px;
+}
+
+/* Stats cards */
+.stats-row {
+  display: flex;
+  gap: 12px;
+  margin-top: 56px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.stat-card {
+  background: rgba(15,23,42,0.7);
+  border: 1px solid var(--navy-700);
+  border-radius: 12px;
+  padding: 16px 24px;
+  text-align: center;
+  backdrop-filter: blur(8px);
+  min-width: 100px;
+}
+.stat-value {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--gold);
+  margin-bottom: 4px;
+}
+.stat-label {
+  font-size: 10px;
+  color: #475569;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+}
+
+/* Footer */
+footer {
+  padding: 20px 32px;
+  text-align: center;
+  font-size: 11px;
+  color: #334155;
+  border-top: 1px solid rgba(51,65,85,0.3);
   position: relative;
   z-index: 1;
 }
-.dot {
-  border-radius: 50%;
-  border: 2px solid;
-  background: var(--navy-950);
-}
-.dot.Annual  { width: 18px; height: 18px; border-color: var(--annual-c);  box-shadow: 0 0 10px var(--annual-c); }
-.dot.Monthly { width: 14px; height: 14px; border-color: var(--monthly-c); box-shadow: 0 0 6px var(--monthly-c); }
-.dot.Weekly  { width: 11px; height: 11px; border-color: var(--weekly-c); }
-.dot.Daily   { width: 8px;  height: 8px;  border-color: var(--daily-c); }
-
-/* カード */
-.card {
-  flex: 1;
-  background: var(--navy-800);
-  border-radius: 10px;
-  border-left: 3px solid;
-  padding: 12px 16px;
-  min-width: 0;
-  transition: box-shadow 0.3s;
-}
-.card.Annual  { border-left-color: var(--annual-c); }
-.card.Monthly { border-left-color: var(--monthly-c); }
-.card.Weekly  { border-left-color: var(--weekly-c); }
-.card.Daily   { border-left-color: var(--daily-c); }
-.card.highlight { box-shadow: 0 0 0 2px var(--gold); }
-
-.card-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-  flex-wrap: wrap;
-}
-.badge {
-  font-size: 9px;
-  font-weight: 800;
-  padding: 2px 7px;
-  border-radius: 8px;
-  letter-spacing: 0.06em;
-}
-.badge.Annual  { background: var(--annual-c);  color: #fff; }
-.badge.Monthly { background: var(--monthly-c); color: var(--navy-950); }
-.badge.Weekly  { background: var(--weekly-c);  color: var(--navy-950); }
-.badge.Daily   { background: var(--daily-c);   color: var(--navy-950); }
-
-.card-date  { font-size: 12px; color: #64748b; }
-.date-range { font-size: 10px; color: #475569; }
-
-.emotion-pill {
-  margin-left: auto;
-  font-size: 10px;
-  padding: 2px 8px;
-  border-radius: 10px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-.eg  { background: rgba(245,158,11,0.15); color: #f59e0b; }
-.eg2 { background: rgba(52,211,153,0.15); color: #34d399; }
-.eg3 { background: rgba(251,146,60,0.15); color: #fb923c; }
-.eg4 { background: rgba(248,113,113,0.15);color: #f87171; }
-
-.summary {
-  font-size: 13px;
-  color: #cbd5e1;
-  line-height: 1.65;
-  margin-bottom: 6px;
-}
-
-.toggle-btn {
-  font-size: 11px;
-  color: #475569;
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  transition: color 0.15s;
-}
-.toggle-btn:hover { color: var(--gold); }
-
-.detail {
-  display: none;
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid var(--navy-700);
-}
-.detail.open { display: block; }
-
-.detail-row { margin-bottom: 10px; }
-.detail-label {
-  font-size: 9px;
-  color: #475569;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  margin-bottom: 4px;
-}
-.detail-value { font-size: 12px; color: #94a3b8; line-height: 1.6; }
-
-.kw-wrap { display: flex; flex-wrap: wrap; gap: 4px; }
-.kw { font-size: 10px; padding: 2px 7px; background: var(--navy-700); border-radius: 6px; color: #94a3b8; }
-
-.loading, .empty {
-  text-align: center;
-  padding: 80px 20px;
-  color: #475569;
-  font-size: 14px;
-  line-height: 2;
-}
-.spinner {
-  width: 32px; height: 32px;
-  border: 3px solid var(--navy-700);
-  border-top-color: var(--gold);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-  margin: 0 auto 16px;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
 </style>
 </head>
 <body>
 
-<header>
-  <div class="header-left">
-    <img src="Genesis_pipe_Logo.png" class="logo" alt="logo" onerror="this.style.display='none'">
-    <div>
-      <h1>AI Partner Sync</h1>
-      <div class="subtitle">Master Timeline — Growth Record</div>
+<canvas id="synapse"></canvas>
+<div class="aurora"></div>
+
+<div class="main">
+  <header>
+    <div class="header-left">
+      <img src="Genesis_pipe_Logo.png" class="logo" alt="logo" onerror="this.style.display='none'">
+      <div>
+        <div class="brand-name">AI Partner Sync</div>
+        <div class="brand-sub">MASTER EDITION</div>
+      </div>
     </div>
-  </div>
-  <div class="header-right" id="entry-count"></div>
-</header>
+    <span class="version-badge">V4</span>
+  </header>
 
-<div class="chart-section">
-  <div class="section-label">DAILY EMOTION ARC</div>
-  <div class="chart-wrapper">
-    <canvas id="emotionChart"></canvas>
-  </div>
-</div>
+  <section class="hero">
+    <img src="Genesis_pipe_Logo.png" class="hero-logo" alt="logo" onerror="this.style.display='none'">
 
-<div class="filter-bar">
-  <button class="filter-btn all active" onclick="setFilter('ALL')">ALL</button>
-  <button class="filter-btn annual"     onclick="setFilter('Annual')">Annual</button>
-  <button class="filter-btn monthly"    onclick="setFilter('Monthly')">Monthly</button>
-  <button class="filter-btn weekly"     onclick="setFilter('Weekly')">Weekly</button>
-  <button class="filter-btn daily"      onclick="setFilter('Daily')">Daily</button>
-</div>
+    <h1 class="hero-title">
+      Growth Record<br><span>Timeline Viewer</span>
+    </h1>
+    <p class="hero-desc">
+      Daily・Weekly・Monthly・Annual の蒸留記録を<br>
+      感情アークとともに時系列で俯瞰する。
+    </p>
 
-<div class="timeline" id="timeline">
-  <div class="loading">
-    <div class="spinner"></div>
-    データを読み込み中...
-  </div>
+    <div class="cta-group">
+      <a href="Timeline_Viewer.html" class="btn-timeline">
+        <span class="btn-icon">⏱</span>
+        Timeline Viewer を開く
+      </a>
+      <a class="btn-sub disabled">
+        AI Chat（Titan）
+        <span class="coming-soon">COMING SOON</span>
+      </a>
+      <a class="btn-sub disabled">
+        Weekly Review
+        <span class="coming-soon">COMING SOON</span>
+      </a>
+    </div>
+
+    <div class="stats-row" id="stats-row">
+      <div class="stat-card">
+        <div class="stat-value" id="stat-total">—</div>
+        <div class="stat-label">TOTAL ENTRIES</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-daily">—</div>
+        <div class="stat-label">DAILY RECORDS</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-weeks">—</div>
+        <div class="stat-label">WEEKS TRACKED</div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    AI Partner Sync Master — Powered by Google Apps Script &amp; GitHub Pages
+  </footer>
 </div>
 
 <script>
-// ★ G_Timeline.gsをデプロイ後、ここにWebApp URLを貼り付けてください
+// Synapse canvas animation
+const canvas = document.getElementById('synapse');
+const ctx = canvas.getContext('2d');
+let nodes = [], W, H;
+
+function resize() {
+  W = canvas.width  = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+for (let i = 0; i < 40; i++) {
+  nodes.push({
+    x: Math.random() * window.innerWidth,
+    y: Math.random() * window.innerHeight,
+    vx: (Math.random() - 0.5) * 0.3,
+    vy: (Math.random() - 0.5) * 0.3,
+  });
+}
+
+function drawSynapse() {
+  ctx.clearRect(0, 0, W, H);
+  nodes.forEach(n => {
+    n.x += n.vx; n.y += n.vy;
+    if (n.x < 0 || n.x > W) n.vx *= -1;
+    if (n.y < 0 || n.y > H) n.vy *= -1;
+  });
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = i + 1; j < nodes.length; j++) {
+      const dx = nodes[i].x - nodes[j].x;
+      const dy = nodes[i].y - nodes[j].y;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      if (dist < 160) {
+        ctx.beginPath();
+        ctx.strokeStyle = `rgba(245,158,11,${0.12 * (1 - dist/160)})`;
+        ctx.lineWidth = 0.5;
+        ctx.moveTo(nodes[i].x, nodes[i].y);
+        ctx.lineTo(nodes[j].x, nodes[j].y);
+        ctx.stroke();
+      }
+    }
+    ctx.beginPath();
+    ctx.arc(nodes[i].x, nodes[i].y, 1.5, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(245,158,11,0.3)';
+    ctx.fill();
+  }
+  requestAnimationFrame(drawSynapse);
+}
+drawSynapse();
+
+// Stats from GAS API
 const GAS_API_URL = 'https://script.google.com/macros/s/AKfycby45pWuHOr7mmtoFTX0Vj5DTkmXYPXHixUxZckXhwqsk5cD7wfYwA6D9ShNxOutdhNu/exec';
 
-let allEntries = [];
-let currentFilter = 'ALL';
-let emotionChart = null;
-
-async function loadData() {
+async function loadStats() {
   try {
     const sep = GAS_API_URL.includes('?') ? '&' : '?';
     const res = await fetch(GAS_API_URL + sep + 'page=timeline_data');
-    if (!res.ok) throw new Error('HTTP ' + res.status);
+    if (!res.ok) return;
     const data = await res.json();
-    allEntries = Array.isArray(data) ? data : [];
-    buildChart(allEntries.filter(e => e.level === 'Daily'));
-    render();
-    document.getElementById('entry-count').textContent = allEntries.length + ' entries';
-  } catch(err) {
-    document.getElementById('timeline').innerHTML =
-      `<div class="empty">データ取得に失敗しました。<br>
-      <small style="color:#334155">${err.message}</small><br><br>
-      <small>index.html の GAS_API_URL を設定してください。</small></div>`;
-    console.error(err);
-  }
+    if (!Array.isArray(data)) return;
+    const total  = data.length;
+    const daily  = data.filter(e => e.level === 'Daily').length;
+    const weekly = data.filter(e => e.level === 'Weekly').length;
+    document.getElementById('stat-total').textContent = total;
+    document.getElementById('stat-daily').textContent = daily;
+    document.getElementById('stat-weeks').textContent = weekly;
+  } catch(e) { /* サイレント */ }
 }
-
-function setFilter(f) {
-  currentFilter = f;
-  document.querySelectorAll('.filter-btn').forEach(b => {
-    const cls = [...b.classList].find(c => c !== 'filter-btn' && c !== 'active') || '';
-    const match = (f === 'ALL' && cls === 'all') || cls === f.toLowerCase();
-    b.classList.toggle('active', match);
-  });
-  render();
-}
-
-function render() {
-  const entries = currentFilter === 'ALL'
-    ? allEntries
-    : allEntries.filter(e => e.level === currentFilter);
-
-  const tl = document.getElementById('timeline');
-  if (!entries.length) {
-    tl.innerHTML = '<div class="empty">表示できるデータがありません</div>';
-    return;
-  }
-  tl.innerHTML = entries.map((e, i) => buildCard(e, i, allEntries.indexOf(e))).join('');
-}
-
-function buildCard(e, animIdx, globalIdx) {
-  const delay = Math.min(animIdx * 35, 600);
-
-  // 感情ピル（Daily のみ）
-  let pillHtml = '';
-  if (e.level === 'Daily' && e.score) {
-    const cls = e.score >= 500 ? 'eg' : e.score >= 350 ? 'eg2' : e.score >= 200 ? 'eg3' : 'eg4';
-    pillHtml = `<span class="emotion-pill ${cls}">${esc(e.emotion)} ${e.score}</span>`;
-  }
-
-  const dateHtml = e.date_range
-    ? `<span class="card-date">${esc(e.date)}</span><span class="date-range"> ${esc(e.date_range)}</span>`
-    : `<span class="card-date">${esc(e.date)}</span>`;
-
-  const fields = [
-    ['INSIGHT',      e.insight],
-    ['KEYSTONE',     e.keystone],
-    ['TOP3 ACTUAL',  e.top3_actual],
-    ['TOP3 PLAN',    e.top3_plan],
-    ['ACTIONS',      e.actions],
-    ['TEACHING',     e.teaching],
-    ['BREAKTHROUGH', e.major_breakthrough],
-    ['IDENTITY',     e.identity_evolution],
-    ['PHILOSOPHY',   e.year_philosophy],
-    ['LEGACY',       e.legacy_testament],
-    ['APHORISM',     e.aphorism],
-  ].filter(([, v]) => v);
-
-  const detailRows = fields.map(([label, val]) =>
-    `<div class="detail-row">
-      <div class="detail-label">${label}</div>
-      <div class="detail-value">${esc(val)}</div>
-    </div>`
-  ).join('');
-
-  const kwHtml = e.keywords
-    ? `<div class="detail-row">
-        <div class="detail-label">KEYWORDS</div>
-        <div class="kw-wrap">${
-          e.keywords.split(/[,\s　]+/).filter(k => k)
-            .map(k => `<span class="kw">${esc(k)}</span>`).join('')
-        }</div>
-      </div>`
-    : '';
-
-  const hasDetail = fields.length > 0 || e.keywords;
-
-  return `
-<div class="entry" id="entry-${globalIdx}" style="animation-delay:${delay}ms">
-  <div class="dot-wrap"><div class="dot ${e.level}"></div></div>
-  <div class="card ${e.level}">
-    <div class="card-header">
-      <span class="badge ${e.level}">${e.level.toUpperCase()}</span>
-      ${dateHtml}
-      ${pillHtml}
-    </div>
-    <div class="summary">${esc(e.summary)}</div>
-    ${hasDetail ? `
-    <button class="toggle-btn" onclick="toggleDetail(${globalIdx},this)">▶ 詳細を見る</button>
-    <div class="detail" id="detail-${globalIdx}">
-      ${detailRows}${kwHtml}
-    </div>` : ''}
-  </div>
-</div>`;
-}
-
-function toggleDetail(id, btn) {
-  const el = document.getElementById('detail-' + id);
-  const open = el.classList.toggle('open');
-  btn.textContent = open ? '▼ 閉じる' : '▶ 詳細を見る';
-}
-
-function buildChart(dailyEntries) {
-  const sorted = [...dailyEntries]
-    .filter(e => e.date)
-    .sort((a, b) => new Date(a.date) - new Date(b.date));
-
-  if (!sorted.length) return;
-
-  const labels = sorted.map(e => e.date.substring(5));
-  const scores = sorted.map(e => e.score || 0);
-  const pointColors = scores.map(s =>
-    s >= 500 ? '#f59e0b' : s >= 350 ? '#34d399' : s >= 200 ? '#fb923c' : '#f87171'
-  );
-
-  const ctx = document.getElementById('emotionChart').getContext('2d');
-  if (emotionChart) emotionChart.destroy();
-
-  emotionChart = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels,
-      datasets: [{
-        data: scores,
-        borderColor: 'rgba(245,158,11,0.7)',
-        backgroundColor: (context) => {
-          const grad = context.chart.ctx.createLinearGradient(0, 0, 0, 150);
-          grad.addColorStop(0, 'rgba(245,158,11,0.15)');
-          grad.addColorStop(1, 'rgba(245,158,11,0)');
-          return grad;
-        },
-        pointBackgroundColor: pointColors,
-        pointBorderColor: pointColors,
-        pointRadius: 4,
-        pointHoverRadius: 7,
-        tension: 0.35,
-        fill: true,
-        borderWidth: 2,
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          backgroundColor: '#1e293b',
-          titleColor: '#94a3b8',
-          bodyColor: '#e2e8f0',
-          callbacks: {
-            title: (items) => sorted[items[0].dataIndex].date,
-            label: (item) => {
-              const e = sorted[item.dataIndex];
-              return ` ${e.emotion || '—'} (${e.score})`;
-            }
-          }
-        }
-      },
-      scales: {
-        x: {
-          ticks: { color: '#475569', font: { size: 9 }, maxTicksLimit: 12, maxRotation: 0 },
-          grid:  { color: 'rgba(51,65,85,0.4)' },
-          border: { color: 'transparent' }
-        },
-        y: {
-          min: 0, max: 700,
-          ticks: { color: '#475569', font: { size: 9 }, stepSize: 100 },
-          grid:  { color: 'rgba(51,65,85,0.4)' },
-          border: { color: 'transparent' }
-        }
-      },
-      onClick: (evt, elements) => {
-        if (!elements.length) return;
-        const target = sorted[elements[0].index];
-        const entryIdx = allEntries.findIndex(
-          e => e.date === target.date && e.level === 'Daily'
-        );
-        if (entryIdx < 0) return;
-        if (currentFilter !== 'ALL' && currentFilter !== 'Daily') setFilter('Daily');
-        setTimeout(() => {
-          const el = document.getElementById('entry-' + entryIdx);
-          if (!el) return;
-          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          const card = el.querySelector('.card');
-          card.classList.add('highlight');
-          setTimeout(() => card.classList.remove('highlight'), 1800);
-        }, 120);
-      }
-    }
-  });
-}
-
-function esc(str) {
-  if (str === null || str === undefined) return '';
-  return String(str)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/\n/g, '<br>');
-}
-
-window.onload = loadData;
+loadStats();
 </script>
 </body>
 </html>
