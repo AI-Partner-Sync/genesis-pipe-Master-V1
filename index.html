@@ -1,1470 +1,508 @@
 <!DOCTYPE html>
-<html>
+<html lang="ja">
 <head>
-  <base target="_top">
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Genesis Pipe</title>
-  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-  <style>
-    /* ── Design System: AI PARTNER SYNC ── */
-    :root {
-      --navy-950: #020817;
-      --navy-900: #0a0f1e;
-      --navy-800: #0d1526;
-      --navy-700: #111c35;
-      --navy-600: #162244;
-      --navy-500: #1e3a6e;
-      --gold-400: #f0c040;
-      --gold-500: #d4a017;
-      --gold-600: #b8860b;
-      --gold-glow: rgba(240,192,64,0.15);
-      --gold-glow-strong: rgba(240,192,64,0.35);
-      --glass-bg: rgba(13,21,38,0.65);
-      --glass-border: rgba(240,192,64,0.18);
-      --glass-blur: blur(16px);
-      --text-primary: #e8edf8;
-      --text-secondary: #8899bb;
-      --text-gold: #f0c040;
-    }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI Partner Sync — Master Timeline</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --navy-950: #0a0f1e;
+  --navy-900: #0f172a;
+  --navy-800: #1e293b;
+  --navy-700: #334155;
+  --gold: #f59e0b;
+  --annual-c: #a855f7;
+  --monthly-c: #38bdf8;
+  --weekly-c: #34d399;
+  --daily-c: #94a3b8;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--navy-950);
+  color: #e2e8f0;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  min-height: 100vh;
+}
 
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+/* ヘッダー */
+header {
+  background: var(--navy-900);
+  border-bottom: 1px solid var(--navy-700);
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.header-left { display: flex; align-items: center; gap: 12px; }
+.logo { width: 32px; height: 32px; border-radius: 8px; }
+header h1 { font-size: 16px; font-weight: 700; color: var(--gold); letter-spacing: 0.05em; }
+.subtitle { font-size: 11px; color: #475569; margin-top: 2px; }
+.header-right { font-size: 11px; color: #475569; }
 
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-      height: calc(var(--vh, 1vh) * 100);
-      height: 100dvh;
-      background: var(--navy-950);
-      color: var(--text-primary);
-      overflow: hidden;
-    }
+/* グラフエリア */
+.chart-section {
+  padding: 20px 24px;
+  background: var(--navy-900);
+  border-bottom: 1px solid var(--navy-700);
+}
+.section-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--gold);
+  letter-spacing: 0.1em;
+  margin-bottom: 10px;
+}
+.chart-wrapper { position: relative; height: 150px; }
 
-    #synapse-canvas {
-      position: fixed; inset: 0; width: 100%; height: 100%;
-      pointer-events: none; z-index: 0; opacity: 0.5;
-    }
+/* フィルターバー */
+.filter-bar {
+  padding: 12px 24px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  background: var(--navy-900);
+  border-bottom: 1px solid var(--navy-700);
+  position: sticky;
+  top: 61px;
+  z-index: 99;
+}
+.filter-btn {
+  padding: 5px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--navy-700);
+  background: transparent;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  letter-spacing: 0.03em;
+}
+.filter-btn:hover { border-color: var(--gold); color: var(--gold); }
+.filter-btn.all.active     { background: var(--gold);      border-color: var(--gold);      color: var(--navy-950); }
+.filter-btn.annual.active  { background: var(--annual-c);  border-color: var(--annual-c);  color: #fff; }
+.filter-btn.monthly.active { background: var(--monthly-c); border-color: var(--monthly-c); color: var(--navy-950); }
+.filter-btn.weekly.active  { background: var(--weekly-c);  border-color: var(--weekly-c);  color: var(--navy-950); }
+.filter-btn.daily.active   { background: var(--daily-c);   border-color: var(--daily-c);   color: var(--navy-950); }
 
-    #aurora-overlay {
-      position: fixed; inset: 0; pointer-events: none; z-index: 1;
-      background: radial-gradient(ellipse 80% 40% at 50% 0%, rgba(30,58,110,0.45) 0%, transparent 70%);
-    }
+/* タイムライン */
+.timeline {
+  padding: 28px 24px 100px;
+  position: relative;
+  max-width: 860px;
+  margin: 0 auto;
+}
+.timeline::before {
+  content: '';
+  position: absolute;
+  left: 48px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(to bottom, var(--gold) 0%, rgba(245,158,11,0.1) 60%, transparent 100%);
+}
 
-    .glass {
-      background: var(--glass-bg);
-      backdrop-filter: var(--glass-blur);
-      -webkit-backdrop-filter: var(--glass-blur);
-      border: 1px solid var(--glass-border);
-    }
+/* エントリー */
+.entry {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+  opacity: 0;
+  transform: translateY(10px);
+  animation: fadeUp 0.35s ease forwards;
+}
+@keyframes fadeUp { to { opacity: 1; transform: translateY(0); } }
 
-    .header {
-      position: relative; z-index: 10; padding: 14px 18px;
-      display: flex; justify-content: space-between; align-items: center;
-      border-bottom: 1px solid rgba(255,255,255,0.05);
-    }
+/* ドット */
+.dot-wrap {
+  flex-shrink: 0;
+  width: 40px;
+  display: flex;
+  justify-content: center;
+  padding-top: 16px;
+  position: relative;
+  z-index: 1;
+}
+.dot {
+  border-radius: 50%;
+  border: 2px solid;
+  background: var(--navy-950);
+}
+.dot.Annual  { width: 18px; height: 18px; border-color: var(--annual-c);  box-shadow: 0 0 10px var(--annual-c); }
+.dot.Monthly { width: 14px; height: 14px; border-color: var(--monthly-c); box-shadow: 0 0 6px var(--monthly-c); }
+.dot.Weekly  { width: 11px; height: 11px; border-color: var(--weekly-c); }
+.dot.Daily   { width: 8px;  height: 8px;  border-color: var(--daily-c); }
 
-    .title { display: flex; align-items: center; }
-    .title-logo { height: 34px; width: auto; display: block; }
-    .title-logo-fallback {
-      display: none; align-items: center; gap: 6px;
-      font-size: 15px; font-weight: 700; color: var(--gold-400); letter-spacing: 0.08em;
-    }
+/* カード */
+.card {
+  flex: 1;
+  background: var(--navy-800);
+  border-radius: 10px;
+  border-left: 3px solid;
+  padding: 12px 16px;
+  min-width: 0;
+  transition: box-shadow 0.3s;
+}
+.card.Annual  { border-left-color: var(--annual-c); }
+.card.Monthly { border-left-color: var(--monthly-c); }
+.card.Weekly  { border-left-color: var(--weekly-c); }
+.card.Daily   { border-left-color: var(--daily-c); }
+.card.highlight { box-shadow: 0 0 0 2px var(--gold); }
 
-    @property --ta { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
-    @keyframes toggle-border-spin { to { --ta: 360deg; } }
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.badge {
+  font-size: 9px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 8px;
+  letter-spacing: 0.06em;
+}
+.badge.Annual  { background: var(--annual-c);  color: #fff; }
+.badge.Monthly { background: var(--monthly-c); color: var(--navy-950); }
+.badge.Weekly  { background: var(--weekly-c);  color: var(--navy-950); }
+.badge.Daily   { background: var(--daily-c);   color: var(--navy-950); }
 
-    #toggle-wrap { display: flex; align-items: center; }
+.card-date  { font-size: 12px; color: #64748b; }
+.date-range { font-size: 10px; color: #475569; }
 
-    #switch-border {
-      padding: 1.5px; border-radius: 9999px;
-      background: conic-gradient(
-        from var(--ta),
-        rgba(240,192,64,0) 0%, rgba(240,192,64,0) 38%,
-        rgba(255,250,160,1) 46%, rgba(255,255,200,1) 50%,
-        rgba(255,250,160,1) 54%, rgba(240,192,64,0) 62%, rgba(240,192,64,0) 100%
-      );
-      animation: toggle-border-spin 6s linear infinite;
-      display: inline-flex;
-    }
+.emotion-pill {
+  margin-left: auto;
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.eg  { background: rgba(245,158,11,0.15); color: #f59e0b; }
+.eg2 { background: rgba(52,211,153,0.15); color: #34d399; }
+.eg3 { background: rgba(251,146,60,0.15); color: #fb923c; }
+.eg4 { background: rgba(248,113,113,0.15);color: #f87171; }
 
-    .switch-container {
-      display: flex; align-items: center; font-size: 11px; color: #ffffff;
-      gap: 8px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
-      background: var(--glass-bg); backdrop-filter: var(--glass-blur);
-      -webkit-backdrop-filter: var(--glass-blur); border-radius: 9999px; padding: 5px 10px;
-    }
+.summary {
+  font-size: 13px;
+  color: #cbd5e1;
+  line-height: 1.65;
+  margin-bottom: 6px;
+}
 
-    .switch { position: relative; display: inline-block; width: 44px; height: 26px; }
-    .switch input { opacity: 0; width: 0; height: 0; }
-    .slider {
-      position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
-      background: linear-gradient(180deg, rgba(30,30,60,0.8), rgba(10,10,30,0.9));
-      border: 1px solid rgba(255,255,255,0.12); transition: .3s; border-radius: 34px;
-      box-shadow: inset 0 2px 4px rgba(0,0,0,0.6), inset 0 -1px 2px rgba(255,255,255,0.05);
-    }
-    .slider:before {
-      position: absolute; content: ""; height: 20px; width: 20px;
-      left: 2px; bottom: 2px; border-radius: 50%;
-      background: radial-gradient(circle at 35% 32%,
-        rgba(255,255,255,0.95) 0%, rgba(200,210,230,0.9) 28%,
-        rgba(140,155,185,0.85) 55%, rgba(80,95,130,0.9) 80%, rgba(40,55,90,1) 100%);
-      box-shadow: 0 3px 6px rgba(0,0,0,0.7), inset 0 1px 3px rgba(255,255,255,0.6), inset 0 -1px 2px rgba(0,0,0,0.4);
-      transition: .3s;
-    }
-    input:checked + .slider {
-      background: linear-gradient(180deg, rgba(180,130,0,0.5), rgba(100,70,0,0.6));
-      border-color: rgba(240,192,64,0.3);
-      box-shadow: inset 0 2px 4px rgba(0,0,0,0.5), 0 0 8px rgba(240,192,64,0.2);
-    }
-    input:checked + .slider:before {
-      transform: translateX(18px);
-      background: radial-gradient(circle at 35% 32%,
-        rgba(255,255,220,1) 0%, rgba(255,220,80,0.95) 30%,
-        rgba(240,160,20,0.9) 60%, rgba(180,100,0,0.95) 85%, rgba(120,60,0,1) 100%);
-      box-shadow: 0 3px 8px rgba(0,0,0,0.6), 0 0 10px rgba(240,192,64,0.7),
-        inset 0 1px 3px rgba(255,255,200,0.8), inset 0 -1px 2px rgba(100,50,0,0.5);
-    }
+.toggle-btn {
+  font-size: 11px;
+  color: #475569;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: color 0.15s;
+}
+.toggle-btn:hover { color: var(--gold); }
 
-    #chat-area {
-      position: relative; z-index: 10; flex: 1;
-      overflow-y: auto; padding: 16px;
-      display: flex; flex-direction: column; gap: 14px;
-    }
-    #chat-area::-webkit-scrollbar { width: 4px; }
-    #chat-area::-webkit-scrollbar-track { background: var(--navy-900); }
-    #chat-area::-webkit-scrollbar-thumb { background: var(--navy-600); border-radius: 2px; }
-    #chat-area::-webkit-scrollbar-thumb:hover { background: var(--gold-600); }
+.detail {
+  display: none;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--navy-700);
+}
+.detail.open { display: block; }
 
-    .bubble {
-      max-width: 85%; padding: 12px 16px; border-radius: 18px;
-      font-size: 14px; line-height: 1.65; word-wrap: break-word; letter-spacing: 0.02em;
-    }
-    .bubble.user {
-      align-self: flex-end;
-      background: rgba(30,58,138,0.5); color: var(--text-primary);
-      border-bottom-right-radius: 4px; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-      box-shadow: 0 4px 16px rgba(30,58,138,0.3), inset 0 0 0 1px rgba(240,192,64,0.12);
-      border: 1px solid rgba(240,192,64,0.2);
-    }
-    .bubble.titan {
-      align-self: flex-start;
-      background: rgba(13,21,38,0.75); color: var(--text-primary);
-      border-bottom-left-radius: 4px; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-      box-shadow: 0 4px 16px rgba(0,0,0,0.4); border: 1px solid rgba(240,192,64,0.14);
-    }
-    .bubble.system {
-      align-self: center; background: rgba(0,0,0,0.35); color: #ffffff;
-      font-size: 11px; padding: 5px 14px; border-radius: 20px; margin: 4px 0;
-      backdrop-filter: blur(8px); border: 1px solid rgba(240,192,64,0.08); letter-spacing: 0.04em;
-    }
+.detail-row { margin-bottom: 10px; }
+.detail-label {
+  font-size: 9px;
+  color: #475569;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  margin-bottom: 4px;
+}
+.detail-value { font-size: 12px; color: #94a3b8; line-height: 1.6; }
 
-    .footer {
-      position: relative; z-index: 10; padding: 12px 14px;
-      padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
-      display: flex; flex-direction: column; gap: 10px;
-      border-top: 1px solid rgba(255,255,255,0.04); flex-shrink: 0;
-    }
+.kw-wrap { display: flex; flex-wrap: wrap; gap: 4px; }
+.kw { font-size: 10px; padding: 2px 7px; background: var(--navy-700); border-radius: 6px; color: #94a3b8; }
 
-    .input-row { display: flex; gap: 10px; align-items: flex-end; }
-
-    #text-input {
-      flex: 1; padding: 13px 16px; border-radius: 20px;
-      background: rgba(13,21,38,0.7); border: 1px solid rgba(240,192,64,0.15);
-      color: var(--text-primary); font-size: 15px; line-height: 1.5;
-      height: auto; min-height: 50px; max-height: 45vh;
-      overflow-y: auto; resize: none; outline: none;
-      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-      box-shadow: inset 0 2px 6px rgba(0,0,0,0.5);
-      transition: border-color 0.2s, height 0.15s ease;
-    }
-    #text-input:focus { border-color: rgba(240,192,64,0.35); }
-    #text-input::placeholder { color: var(--text-secondary); }
-
-    .icon-btn {
-      width: 48px; height: 48px; border-radius: 50%; border: none;
-      display: flex; justify-content: center; align-items: center;
-      cursor: pointer; transition: 0.2s; flex-shrink: 0;
-    }
-
-    #send-btn {
-      background: radial-gradient(circle at 36% 30%,
-        rgba(255,252,180,1) 0%, rgba(255,220,60,0.95) 25%,
-        var(--gold-400) 48%, var(--gold-500) 70%, var(--gold-600) 88%, rgba(90,50,0,1) 100%);
-      color: var(--navy-950);
-      box-shadow: 0 5px 16px rgba(0,0,0,0.6), 0 2px 8px var(--gold-glow-strong),
-        inset 0 1px 4px rgba(255,255,200,0.7), inset 0 -2px 4px rgba(0,0,0,0.35);
-      border: none;
-    }
-    #send-btn .material-icons { font-size: 20px; text-shadow: 0 1px 2px rgba(0,0,0,0.4); }
-    #send-btn:active { transform: scale(0.92); box-shadow: 0 2px 8px rgba(0,0,0,0.5), inset 0 2px 5px rgba(0,0,0,0.3); }
-    #send-btn:hover { box-shadow: 0 6px 20px rgba(240,192,64,0.55), inset 0 1px 4px rgba(255,255,200,0.8), inset 0 -2px 4px rgba(0,0,0,0.3); }
-
-    #mic-btn {
-      background: rgba(13,21,38,0.8); color: var(--gold-400);
-      border: 1px solid var(--glass-border); backdrop-filter: blur(8px);
-    }
-    #mic-btn.recording {
-      background: rgba(239,68,68,0.85); color: white; border-color: transparent;
-      animation: pulse-red 1.5s infinite; box-shadow: 0 0 16px rgba(239,68,68,0.6);
-    }
-    #mic-btn.disabled-mic { opacity: 0.35; cursor: not-allowed; }
-    @keyframes pulse-red {
-      0%   { box-shadow: 0 0 0 0 rgba(239,68,68,0.6); }
-      70%  { box-shadow: 0 0 0 14px rgba(239,68,68,0); }
-      100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
-    }
-
-    .typing-indicator { display: flex; gap: 4px; padding: 5px; }
-    .dot {
-      width: 6px; height: 6px; background: var(--gold-400); border-radius: 50%;
-      animation: bounce 1.4s infinite ease-in-out both;
-    }
-    .dot:nth-child(1) { animation-delay: -0.32s; }
-    .dot:nth-child(2) { animation-delay: -0.16s; }
-    @keyframes bounce {
-      0%, 80%, 100% { transform: scale(0); opacity: 0.4; }
-      40%            { transform: scale(1); opacity: 1; }
-    }
-
-    @property --ba { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
-    @keyframes save-border-spin { to { --ba: 360deg; } }
-
-    #save-area {
-      flex: 1; position: relative; padding: 1.5px; border-radius: 13px;
-      background: conic-gradient(
-        from var(--ba),
-        rgba(240,192,64,0) 0%, rgba(240,192,64,0) 38%,
-        rgba(255,250,160,1) 46%, rgba(255,255,200,1) 50%,
-        rgba(255,250,160,1) 54%, rgba(240,192,64,0) 62%, rgba(240,192,64,0) 100%
-      );
-      animation: save-border-spin 7s linear infinite;
-    }
-    #save-btn {
-      width: 100%; padding: 11px;
-      background: linear-gradient(135deg, rgba(22,34,68,0.92), rgba(13,21,38,0.96));
-      color: var(--text-primary); border: none; border-radius: 11.5px;
-      font-weight: 700; font-size: 13px; letter-spacing: 0.08em;
-      cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 6px;
-      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); transition: box-shadow 0.25s;
-    }
-    #save-btn:hover { box-shadow: 0 0 18px var(--gold-glow-strong); }
-    #save-btn:active { transform: scale(0.985); }
-
-    .save-row { display: flex; align-items: center; gap: 10px; }
-
-    #settings-btn {
-      background: none; border: none; cursor: pointer; color: var(--text-secondary);
-      display: flex; align-items: center; padding: 6px; border-radius: 8px;
-      transition: color 0.2s, background 0.2s; margin-right: 6px;
-    }
-    #settings-btn:hover { color: var(--gold-400); background: rgba(240,192,64,0.08); }
-    #settings-btn .material-icons { font-size: 20px; }
-    #timeline-btn { background: none; border: none; cursor: pointer; color: var(--text-secondary); display: flex; align-items: center; padding: 6px; border-radius: 8px; transition: color 0.2s, background 0.2s; margin-right: 2px; text-decoration: none; }
-    #timeline-btn:hover { color: var(--gold-400); background: rgba(240,192,64,0.08); }
-    #timeline-btn .material-icons { font-size: 20px; }
-    #tts-btn { background: none; border: none; cursor: pointer; color: var(--text-secondary); display: flex; align-items: center; padding: 6px; border-radius: 8px; transition: color 0.2s, background 0.2s; margin-right: 2px; }
-    #tts-btn:hover { color: var(--gold-400); background: rgba(240,192,64,0.08); }
-    #tts-btn.active { color: var(--gold-400); }
-    #tts-btn .material-icons { font-size: 20px; }
-    .tts-section-title { font-size: 11px; font-weight: 700; color: var(--gold-400); letter-spacing: 0.08em; text-transform: uppercase; margin: 16px 0 10px; border-top: 1px solid rgba(240,192,64,0.15); padding-top: 14px; }
-    .settings-select { width: 100%; padding: 10px 13px; font-size: 14px; margin-bottom: 6px; box-sizing: border-box; background: rgba(13,21,38,0.8); border: 1px solid rgba(240,192,64,0.2); border-radius: 8px; color: var(--text-primary); outline: none; }
-    .settings-select:focus { border-color: var(--gold-400); }
-    .settings-select option { background: #0d1526; }
-    .slider-row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
-    .slider-row input[type=range] { flex: 1; accent-color: var(--gold-400); }
-    .slider-val { font-size: 12px; color: var(--gold-400); font-weight: 700; min-width: 36px; text-align: right; }
-
-    /* ── Settings Modal ── */
-    #settings-overlay {
-      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55);
-      z-index: 200; justify-content: center; align-items: center;
-      backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
-    }
-    #settings-overlay.open { display: flex; }
-
-    #settings-modal {
-      background: var(--navy-800); border: 1px solid var(--glass-border);
-      border-radius: 16px; padding: 28px 24px 24px;
-      width: 340px; max-width: 90vw; max-height: 90vh; overflow-y: auto;
-      box-shadow: 0 24px 64px rgba(0,0,0,0.7);
-    }
-    #settings-modal h3 {
-      margin: 0 0 20px; font-size: 15px; color: var(--gold-400);
-      display: flex; align-items: center; gap: 7px;
-    }
-    .settings-label {
-      display: block; font-size: 12px; font-weight: 600;
-      color: var(--text-secondary); margin-bottom: 6px; letter-spacing: 0.04em;
-    }
-    .settings-input {
-      width: 100%; padding: 10px 13px; font-size: 14px; margin-bottom: 6px;
-      box-sizing: border-box; background: rgba(13,21,38,0.8);
-      border: 1px solid rgba(240,192,64,0.2); border-radius: 8px;
-      color: var(--text-primary); outline: none; transition: border-color 0.2s;
-    }
-    .settings-input:focus { border-color: var(--gold-400); }
-    .settings-hint { font-size: 11px; color: var(--text-secondary); margin-bottom: 18px; }
-    .settings-btn-group { display: flex; justify-content: flex-end; gap: 10px; margin-top: 6px; }
-    .settings-btn-cancel {
-      padding: 9px 18px; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;
-      background: none; color: var(--text-secondary); font-size: 13px; cursor: pointer; transition: 0.2s;
-    }
-    .settings-btn-cancel:hover { color: var(--text-primary); }
-    .settings-btn-save {
-      padding: 9px 20px; border: none; border-radius: 8px;
-      background: var(--gold-400); color: var(--navy-950);
-      font-size: 13px; font-weight: 700; cursor: pointer; transition: 0.2s;
-    }
-    .settings-btn-save:hover { background: var(--gold-500); }
-    .settings-btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
-
-    /* ── URL Display in Settings ── */
-    .settings-url-section {
-      margin-bottom: 18px; padding: 14px; border-radius: 10px;
-      background: rgba(240,192,64,0.06); border: 1px solid rgba(240,192,64,0.2);
-    }
-    .settings-url-label {
-      font-size: 11px; font-weight: 600; color: var(--text-gold);
-      letter-spacing: 0.06em; margin-bottom: 8px; display: flex; align-items: center; gap: 5px;
-    }
-    .settings-url-row { display: flex; align-items: center; gap: 8px; }
-    .settings-url-display {
-      flex: 1; font-size: 11px; color: var(--text-secondary);
-      background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 6px; padding: 7px 10px;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-      font-family: monospace;
-    }
-    .settings-url-copy-btn {
-      flex-shrink: 0; padding: 7px 10px; border-radius: 6px;
-      background: rgba(240,192,64,0.15); border: 1px solid rgba(240,192,64,0.3);
-      color: var(--gold-400); font-size: 12px; cursor: pointer; transition: 0.2s;
-      display: flex; align-items: center; gap: 4px;
-    }
-    .settings-url-copy-btn:hover { background: rgba(240,192,64,0.25); }
-    .settings-url-change {
-      font-size: 11px; color: var(--text-secondary); margin-top: 8px;
-      cursor: pointer; text-decoration: underline; text-underline-offset: 2px;
-    }
-    .settings-url-change:hover { color: var(--text-primary); }
-    .settings-url-edit { display: none; margin-top: 8px; }
-    .settings-url-edit.open { display: block; }
-
-    /* ── Initial Setup Modal ── */
-    #setup-overlay {
-      display: none; position: fixed; inset: 0; z-index: 300;
-      background: rgba(2,8,23,0.92); justify-content: center; align-items: center;
-      backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
-    }
-    #setup-overlay.open { display: flex; }
-    #setup-modal {
-      background: var(--navy-800); border: 1px solid var(--glass-border);
-      border-radius: 20px; padding: 32px 28px 28px;
-      width: 360px; max-width: 92vw; box-shadow: 0 32px 80px rgba(0,0,0,0.8);
-    }
-    #setup-modal .setup-icon { font-size: 36px; text-align: center; margin-bottom: 12px; }
-    #setup-modal h3 {
-      margin: 0 0 8px; font-size: 16px; color: var(--gold-400);
-      text-align: center; font-weight: 700;
-    }
-    #setup-modal p {
-      font-size: 13px; color: var(--text-secondary); text-align: center;
-      margin-bottom: 20px; line-height: 1.6;
-    }
-    #setup-modal .setup-step {
-      font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;
-      font-weight: 600; letter-spacing: 0.04em;
-    }
-    #setup-gas-url {
-      width: 100%; padding: 11px 13px; font-size: 13px;
-      background: rgba(13,21,38,0.8); border: 1px solid rgba(240,192,64,0.3);
-      border-radius: 8px; color: var(--text-primary); outline: none;
-      box-sizing: border-box; margin-bottom: 6px; font-family: monospace;
-      transition: border-color 0.2s;
-    }
-    #setup-gas-url:focus { border-color: var(--gold-400); }
-    #setup-gas-url::placeholder { color: rgba(136,153,187,0.5); font-family: sans-serif; }
-    .setup-hint { font-size: 11px; color: var(--text-secondary); margin-bottom: 20px; }
-    #setup-save-btn {
-      width: 100%; padding: 13px; border: none; border-radius: 10px;
-      background: var(--gold-400); color: var(--navy-950);
-      font-size: 14px; font-weight: 700; cursor: pointer; transition: 0.2s;
-    }
-    #setup-save-btn:hover { background: var(--gold-500); }
-    #setup-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-    /* ── BGM Control ── */
-    #bgm-control {
-      display: flex; align-items: center; gap: 7px; padding: 8px 11px;
-      border-radius: 9999px; background: var(--glass-bg);
-      backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
-      border: 1px solid var(--glass-border); flex-shrink: 0;
-    }
-    #bgm-toggle {
-      background: none; border: none; cursor: pointer; color: var(--text-primary);
-      display: flex; align-items: center; padding: 0; transition: color 0.2s;
-    }
-    #bgm-toggle:hover { color: var(--gold-400); }
-    #bgm-toggle .material-icons { font-size: 16px; }
-    #bgm-slider-toggle {
-      background: none; border: none; cursor: pointer;
-      color: var(--text-secondary); font-size: 10px; line-height: 1; padding: 0; transition: opacity 0.2s;
-    }
-    #bgm-slider-toggle:hover { color: var(--text-primary); }
-    #bgm-slider { display: none; width: 66px; accent-color: var(--gold-400); }
-    #bgm-slider.open { display: block; }
-
-    #synth-trigger {
-      background: rgba(13,21,38,0.8); border: 1px solid rgba(240,192,64,0.2);
-      border-radius: 9999px; color: var(--gold-400);
-      font-size: 11px; font-weight: 700; letter-spacing: 0.05em;
-      padding: 6px 12px; cursor: pointer;
-      display: flex; align-items: center; gap: 5px;
-      flex-shrink: 0; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
-      transition: 0.2s; white-space: nowrap;
-    }
-    #synth-trigger:hover { border-color: rgba(240,192,64,0.5); box-shadow: 0 0 12px var(--gold-glow); }
-    #synth-trigger:active { transform: scale(0.96); }
-
-    #synth-overlay { position: fixed; inset: 0; z-index: 40; display: none; }
-    #synth-overlay.open { display: block; }
-
-    #synth-panel {
-      position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
-      padding: 0 14px 28px;
-      transform: translateY(110%);
-      transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s;
-      opacity: 0; pointer-events: none;
-    }
-    #synth-panel.open { transform: translateY(0); opacity: 1; pointer-events: auto; }
-
-    #synth-panel-card {
-      background: var(--glass-bg); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
-      border: 1px solid var(--glass-border); border-radius: 18px; padding: 16px 14px 14px;
-      box-shadow: 0 -4px 30px rgba(0,0,0,0.6);
-    }
-    #synth-panel-title {
-      font-size: 11px; font-weight: 700; color: var(--gold-400);
-      letter-spacing: 0.1em; text-transform: uppercase; text-align: center; margin-bottom: 14px;
-    }
-    .synthesis-row { display: flex; gap: 8px; }
-    .synth-btn {
-      flex: 1; padding: 12px 4px;
-      background: rgba(2,8,23,0.5); border: 1px solid rgba(240,192,64,0.18);
-      border-radius: 12px; color: var(--text-primary); cursor: pointer;
-      backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
-      transition: 0.2s; display: flex; flex-direction: column; align-items: center; gap: 4px;
-    }
-    .synth-btn:hover { border-color: rgba(240,192,64,0.5); background: rgba(22,34,68,0.85); box-shadow: 0 0 14px var(--gold-glow); }
-    .synth-btn:active { transform: scale(0.94); }
-    .synth-btn .synth-icon { font-size: 20px; }
-    .synth-btn .synth-label { font-size: 10px; font-weight: 700; color: var(--text-secondary); letter-spacing: 0.04em; }
-
-    #synth-modal {
-      position: fixed; inset: 0; z-index: 100;
-      background: rgba(2,8,23,0.75); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
-      justify-content: center; align-items: center;
-    }
-    #synth-modal-card {
-      background: var(--glass-bg); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
-      border: 1px solid var(--glass-border); border-radius: 18px; padding: 24px 20px;
-      width: min(320px, 88vw); box-shadow: 0 8px 40px rgba(0,0,0,0.6);
-    }
-    #synth-modal-title { font-size: 14px; font-weight: 700; color: var(--gold-400); letter-spacing: 0.05em; margin-bottom: 10px; }
-    #synth-modal-message { font-size: 12px; color: var(--text-secondary); margin-bottom: 14px; }
-    #synth-modal-input {
-      width: 100%; padding: 10px 12px;
-      background: rgba(2,8,23,0.6); border: 1px solid rgba(240,192,64,0.2);
-      border-radius: 10px; color: var(--text-primary); font-size: 14px; margin-bottom: 20px;
-      outline: none; box-sizing: border-box;
-    }
-    #synth-modal-input:focus { border-color: rgba(240,192,64,0.45); }
-    .synth-modal-btns { display: flex; gap: 10px; justify-content: flex-end; }
-    .synth-modal-btns button { padding: 9px 18px; border: none; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; transition: 0.2s; }
-    .synth-modal-btns .btn-cancel { background: rgba(255,255,255,0.07); color: var(--text-secondary); border: 1px solid rgba(255,255,255,0.1); }
-    .synth-modal-btns .btn-cancel:hover { color: var(--text-primary); }
-    .synth-modal-btns .btn-execute { background: linear-gradient(135deg, rgba(240,192,64,0.25), rgba(180,130,0,0.35)); color: var(--gold-400); border: 1px solid rgba(240,192,64,0.35); }
-    .synth-modal-btns .btn-execute:hover { box-shadow: 0 0 12px var(--gold-glow-strong); }
-    .synth-modal-btns .btn-execute:active { transform: scale(0.97); }
-
-    /* ── Daily Compass Card ── */
-    #compass-card {
-      position: relative; z-index: 10; flex-shrink: 0;
-      border-bottom: 1px solid rgba(240,192,64,0.1);
-    }
-    #compass-collapsed {
-      display: flex; align-items: center; gap: 8px;
-      padding: 7px 14px; cursor: pointer; user-select: none;
-    }
-    #compass-phase-badge {
-      font-size: 11px; font-weight: 700; letter-spacing: 0.05em;
-      padding: 2px 10px; border-radius: 20px; white-space: nowrap; flex-shrink: 0;
-      background: rgba(240,192,64,0.12); color: var(--gold-400);
-      border: 1px solid rgba(240,192,64,0.22);
-    }
-    #compass-summary {
-      flex: 1; font-size: 11px; color: var(--text-secondary);
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    #compass-edit-btn {
-      flex-shrink: 0; background: none; border: none; font-size: 13px;
-      cursor: pointer; padding: 4px 7px; border-radius: 6px;
-      color: var(--text-secondary); transition: color 0.2s, background 0.2s;
-    }
-    #compass-edit-btn:hover { color: var(--gold-400); background: rgba(240,192,64,0.08); }
-    #compass-toggle-btn {
-      flex-shrink: 0; background: none; border: none; font-size: 12px;
-      cursor: pointer; color: var(--text-secondary); padding: 4px; line-height: 1; transition: color 0.2s;
-    }
-    #compass-toggle-btn:hover { color: var(--gold-400); }
-    #compass-expanded { display: none; padding: 2px 14px 12px; background: rgba(2,8,23,0.5); }
-    #compass-expanded.open { display: block; }
-    .compass-section { margin-bottom: 9px; }
-    .compass-section:last-child { margin-bottom: 0; }
-    .compass-section-label {
-      font-size: 10px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase;
-      color: var(--text-secondary); margin-bottom: 4px;
-    }
-    .compass-top3-list { list-style: none; display: flex; flex-direction: column; gap: 2px; }
-    .compass-top3-item { display: flex; align-items: baseline; gap: 6px; font-size: 12px; line-height: 1.4; }
-    .compass-top3-num { font-size: 10px; font-weight: 700; color: var(--gold-400); min-width: 14px; flex-shrink: 0; }
-    .compass-top3-text { color: var(--text-primary); }
-    .compass-top3-text.empty { color: var(--text-secondary); font-style: italic; }
-    .compass-daily-text { font-size: 12px; color: var(--text-primary); line-height: 1.5; }
-    .compass-daily-text.empty { color: var(--text-secondary); font-style: italic; }
-
-    /* ── Compass Edit Modal ── */
-    #compass-overlay {
-      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6);
-      z-index: 250; justify-content: center; align-items: center;
-      backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
-    }
-    #compass-overlay.open { display: flex; }
-    #compass-modal {
-      background: var(--navy-800); border: 1px solid var(--glass-border);
-      border-radius: 16px; padding: 24px 20px 20px;
-      width: 340px; max-width: 92vw; max-height: 90vh; overflow-y: auto;
-      box-shadow: 0 24px 64px rgba(0,0,0,0.7);
-    }
-    #compass-modal h3 { margin: 0 0 16px; font-size: 14px; color: var(--gold-400); }
-    .compass-field-label {
-      display: block; font-size: 11px; font-weight: 600; color: var(--text-secondary);
-      letter-spacing: 0.04em; margin-bottom: 5px;
-    }
-    .compass-field-row { display: flex; gap: 6px; margin-bottom: 9px; align-items: center; }
-    .compass-field-input {
-      flex: 1; padding: 9px 12px; font-size: 13px; box-sizing: border-box;
-      background: rgba(13,21,38,0.8); border: 1px solid rgba(240,192,64,0.2);
-      border-radius: 8px; color: var(--text-primary); outline: none; transition: border-color 0.2s;
-    }
-    .compass-field-input:focus { border-color: rgba(240,192,64,0.4); }
-    .compass-field-input::placeholder { color: rgba(136,153,187,0.45); }
-    .compass-daily-input {
-      width: 100%; padding: 9px 12px; font-size: 13px; box-sizing: border-box;
-      background: rgba(13,21,38,0.8); border: 1px solid rgba(240,192,64,0.2);
-      border-radius: 8px; color: var(--text-primary); outline: none;
-      resize: vertical; min-height: 72px; font-family: inherit; line-height: 1.5; transition: border-color 0.2s;
-    }
-    .compass-daily-input:focus { border-color: rgba(240,192,64,0.4); }
-    .compass-daily-input::placeholder { color: rgba(136,153,187,0.45); }
-    .compass-voice-btn {
-      flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%;
-      background: rgba(13,21,38,0.8); border: 1px solid rgba(240,192,64,0.2);
-      color: var(--gold-400); display: flex; align-items: center; justify-content: center;
-      cursor: pointer; transition: 0.2s;
-    }
-    .compass-voice-btn .material-icons { font-size: 16px; }
-    .compass-voice-btn:hover { border-color: rgba(240,192,64,0.5); background: rgba(240,192,64,0.1); }
-    .compass-voice-btn.recording { background: rgba(239,68,68,0.85); border-color: transparent; color: white; animation: pulse-red 1.5s infinite; }
-    .compass-divider {
-      font-size: 10px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase;
-      color: var(--gold-400); margin: 14px 0 10px;
-      border-top: 1px solid rgba(240,192,64,0.12); padding-top: 12px;
-    }
-    .compass-modal-btns { display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px; }
-    .compass-btn-cancel {
-      padding: 9px 18px; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;
-      background: none; color: var(--text-secondary); font-size: 13px; cursor: pointer; transition: 0.2s;
-    }
-    .compass-btn-cancel:hover { color: var(--text-primary); }
-    .compass-btn-save {
-      padding: 9px 20px; border: none; border-radius: 8px;
-      background: var(--gold-400); color: var(--navy-950);
-      font-size: 13px; font-weight: 700; cursor: pointer; transition: 0.2s;
-    }
-    .compass-btn-save:hover { background: var(--gold-500); }
-  </style>
+.loading, .empty {
+  text-align: center;
+  padding: 80px 20px;
+  color: #475569;
+  font-size: 14px;
+  line-height: 2;
+}
+.spinner {
+  width: 32px; height: 32px;
+  border: 3px solid var(--navy-700);
+  border-top-color: var(--gold);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto 16px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
 </head>
 <body>
 
-  <!-- 初回セットアップモーダル -->
-  <div id="setup-overlay">
-    <div id="setup-modal">
-      <div class="setup-icon">🔗</div>
-      <h3>Genesis Pipe へようこそ</h3>
-      <p>はじめに、あなたの<br>GASウェブアプリURLを設定してください</p>
-      <div class="setup-step">GASウェブアプリURL（/exec で終わるURL）</div>
-      <input type="url" id="setup-gas-url" placeholder="https://script.google.com/macros/s/.../exec">
-      <div class="setup-hint">スプレッドシートのサイドバー → パートナー設定 からコピーできます</div>
-      <button id="setup-save-btn" onclick="saveInitialSetup()">接続する</button>
+<header>
+  <div class="header-left">
+    <img src="Genesis_pipe_Logo.png" class="logo" alt="logo" onerror="this.style.display='none'">
+    <div>
+      <h1>AI Partner Sync</h1>
+      <div class="subtitle">Master Timeline — Growth Record</div>
     </div>
   </div>
+  <div class="header-right" id="entry-count"></div>
+</header>
 
-  <!-- パートナー設定モーダル -->
-  <div id="settings-overlay" onclick="handleOverlayClick(event)">
-    <div id="settings-modal">
-      <h3><span class="material-icons" style="font-size:18px;">settings</span> パートナー設定</h3>
-
-      <div class="settings-url-section">
-        <div class="settings-url-label">
-          <span class="material-icons" style="font-size:14px;">link</span>
-          接続中のGASウェブアプリURL
-        </div>
-        <div class="settings-url-row">
-          <div class="settings-url-display" id="settings-url-display">未設定</div>
-          <button class="settings-url-copy-btn" onclick="copyGasUrl()">
-            <span class="material-icons" style="font-size:14px;">content_copy</span>
-          </button>
-        </div>
-        <div class="settings-url-change" onclick="toggleUrlEdit()">URLを変更する</div>
-        <div class="settings-url-edit" id="settings-url-edit">
-          <input type="url" id="settings-gas-url-input" class="settings-input"
-                 placeholder="https://script.google.com/macros/s/.../exec">
-        </div>
-      </div>
-
-      <label class="settings-label">あなたの名前（AIに呼んでもらいたい名前）</label>
-      <input type="text" id="settings-user-name" class="settings-input" placeholder="例: 瑠光子">
-      <div class="settings-hint">AIがこの名前であなたに語りかけます</div>
-      <label class="settings-label">AIパートナーの名前</label>
-      <input type="text" id="settings-ai-name" class="settings-input" placeholder="例: けんちゃん">
-      <div class="settings-hint">あなたの専属AI伴走者の名前です</div>
-
-      <!-- TTS設定 -->
-      <div class="tts-section-title">🔊 音声読み上げ（CLOUD TTS）</div>
-      <label class="settings-label">声の種類</label>
-      <select id="settings-tts-voice" class="settings-select">
-        <option value="ja-JP-Neural2-C">男性A — Neural2-C（低音・落ち着き）</option>
-        <option value="ja-JP-Neural2-D">男性B — Neural2-D（若め・明るめ）</option>
-        <option value="ja-JP-Neural2-B">女性A — Neural2-B（自然・明るい）</option>
-        <option value="ja-JP-Wavenet-C">男性C — Wavenet-C（軽量・標準）</option>
-        <option value="ja-JP-Wavenet-B">女性B — Wavenet-B（軽量・標準）</option>
-      </select>
-      <div class="settings-hint">Neural2 が最も自然。Wavenet は応答が少し速い。</div>
-      <label class="settings-label">話す速度</label>
-      <div class="slider-row">
-        <input type="range" id="settings-tts-rate" min="0.7" max="1.3" step="0.05" value="0.93"
-          oninput="document.getElementById('rate-val').textContent=parseFloat(this.value).toFixed(2)">
-        <span class="slider-val" id="rate-val">0.93</span>
-      </div>
-      <div class="settings-hint">0.7（ゆっくり）→ 1.0（標準）→ 1.3（速め）</div>
-      <label class="settings-label">ピッチ（音の高さ）</label>
-      <div class="slider-row">
-        <input type="range" id="settings-tts-pitch" min="-5" max="5" step="0.5" value="0"
-          oninput="document.getElementById('pitch-val').textContent=parseFloat(this.value).toFixed(1)">
-        <span class="slider-val" id="pitch-val">0.0</span>
-      </div>
-      <div class="settings-hint">−5（低め）→ 0（標準）→ +5（高め）</div>
-
-      <div class="settings-btn-group">
-        <button class="settings-btn-cancel" onclick="closeSettings()">キャンセル</button>
-        <button class="settings-btn-save" id="settings-save-btn" onclick="saveSettings()">保存する</button>
-      </div>
-    </div>
+<div class="chart-section">
+  <div class="section-label">DAILY EMOTION ARC</div>
+  <div class="chart-wrapper">
+    <canvas id="emotionChart"></canvas>
   </div>
+</div>
 
-  <!-- Compass Edit Modal -->
-  <div id="compass-overlay" onclick="handleCompassOverlayClick(event)">
-    <div id="compass-modal">
-      <h3>🧭 Weekly Compass を設定</h3>
+<div class="filter-bar">
+  <button class="filter-btn all active" onclick="setFilter('ALL')">ALL</button>
+  <button class="filter-btn annual"     onclick="setFilter('Annual')">Annual</button>
+  <button class="filter-btn monthly"    onclick="setFilter('Monthly')">Monthly</button>
+  <button class="filter-btn weekly"     onclick="setFilter('Weekly')">Weekly</button>
+  <button class="filter-btn daily"      onclick="setFilter('Daily')">Daily</button>
+</div>
 
-      <label class="compass-field-label">🎯 今週のTOP3</label>
-      <div class="compass-field-row">
-        <input type="text" id="cm-top1" class="compass-field-input" placeholder="最優先タスク">
-        <button class="compass-voice-btn" onclick="startCompassVoice('cm-top1',this)"><span class="material-icons">mic</span></button>
-      </div>
-      <div class="compass-field-row">
-        <input type="text" id="cm-top2" class="compass-field-input" placeholder="2番目のタスク">
-        <button class="compass-voice-btn" onclick="startCompassVoice('cm-top2',this)"><span class="material-icons">mic</span></button>
-      </div>
-      <div class="compass-field-row">
-        <input type="text" id="cm-top3" class="compass-field-input" placeholder="3番目のタスク（任意）">
-        <button class="compass-voice-btn" onclick="startCompassVoice('cm-top3',this)"><span class="material-icons">mic</span></button>
-      </div>
-
-      <div class="compass-divider">📌 今日の宣言（任意）</div>
-      <div class="compass-field-row" style="align-items:flex-start;">
-        <textarea id="cm-daily" class="compass-daily-input" placeholder="今日やること。空欄でもOK — TOP3を軸にコーチングします"></textarea>
-        <button class="compass-voice-btn" onclick="startCompassVoice('cm-daily',this)" style="margin-top:2px;"><span class="material-icons">mic</span></button>
-      </div>
-
-      <div class="compass-modal-btns">
-        <button class="compass-btn-cancel" onclick="closeCompassEdit()">キャンセル</button>
-        <button class="compass-btn-save" onclick="saveCompassEdit()">保存する</button>
-      </div>
-    </div>
+<div class="timeline" id="timeline">
+  <div class="loading">
+    <div class="spinner"></div>
+    データを読み込み中...
   </div>
+</div>
 
-  <canvas id="synapse-canvas"></canvas>
-  <div id="aurora-overlay"></div>
+<script>
+// ★ G_Timeline.gsをデプロイ後、ここにWebApp URLを貼り付けてください
+const GAS_API_URL = 'YOUR_GAS_DEPLOY_URL_HERE';
 
-  <!-- Header -->
-  <div class="header glass">
-    <div class="title">
-      <img id="logo-img" src="./Genesis_pipe_Logo.png" alt="Genesis Pipe" class="title-logo"
-           onerror="this.style.display='none'; document.getElementById('logo-fallback').style.display='flex';">
-      <div id="logo-fallback" class="title-logo-fallback">🚀 <span>GENESIS PIPE</span></div>
+let allEntries = [];
+let currentFilter = 'ALL';
+let emotionChart = null;
+
+async function loadData() {
+  try {
+    const sep = GAS_API_URL.includes('?') ? '&' : '?';
+    const res = await fetch(GAS_API_URL + sep + 'page=timeline_data');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    allEntries = Array.isArray(data) ? data : [];
+    buildChart(allEntries.filter(e => e.level === 'Daily'));
+    render();
+    document.getElementById('entry-count').textContent = allEntries.length + ' entries';
+  } catch(err) {
+    document.getElementById('timeline').innerHTML =
+      `<div class="empty">データ取得に失敗しました。<br>
+      <small style="color:#334155">${err.message}</small><br><br>
+      <small>index.html の GAS_API_URL を設定してください。</small></div>`;
+    console.error(err);
+  }
+}
+
+function setFilter(f) {
+  currentFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => {
+    const cls = [...b.classList].find(c => c !== 'filter-btn' && c !== 'active') || '';
+    const match = (f === 'ALL' && cls === 'all') || cls === f.toLowerCase();
+    b.classList.toggle('active', match);
+  });
+  render();
+}
+
+function render() {
+  const entries = currentFilter === 'ALL'
+    ? allEntries
+    : allEntries.filter(e => e.level === currentFilter);
+
+  const tl = document.getElementById('timeline');
+  if (!entries.length) {
+    tl.innerHTML = '<div class="empty">表示できるデータがありません</div>';
+    return;
+  }
+  tl.innerHTML = entries.map((e, i) => buildCard(e, i, allEntries.indexOf(e))).join('');
+}
+
+function buildCard(e, animIdx, globalIdx) {
+  const delay = Math.min(animIdx * 35, 600);
+
+  // 感情ピル（Daily のみ）
+  let pillHtml = '';
+  if (e.level === 'Daily' && e.score) {
+    const cls = e.score >= 500 ? 'eg' : e.score >= 350 ? 'eg2' : e.score >= 200 ? 'eg3' : 'eg4';
+    pillHtml = `<span class="emotion-pill ${cls}">${esc(e.emotion)} ${e.score}</span>`;
+  }
+
+  const dateHtml = e.date_range
+    ? `<span class="card-date">${esc(e.date)}</span><span class="date-range"> ${esc(e.date_range)}</span>`
+    : `<span class="card-date">${esc(e.date)}</span>`;
+
+  const fields = [
+    ['INSIGHT',      e.insight],
+    ['KEYSTONE',     e.keystone],
+    ['TOP3 ACTUAL',  e.top3_actual],
+    ['TOP3 PLAN',    e.top3_plan],
+    ['ACTIONS',      e.actions],
+    ['TEACHING',     e.teaching],
+    ['BREAKTHROUGH', e.major_breakthrough],
+    ['IDENTITY',     e.identity_evolution],
+    ['PHILOSOPHY',   e.year_philosophy],
+    ['LEGACY',       e.legacy_testament],
+    ['APHORISM',     e.aphorism],
+  ].filter(([, v]) => v);
+
+  const detailRows = fields.map(([label, val]) =>
+    `<div class="detail-row">
+      <div class="detail-label">${label}</div>
+      <div class="detail-value">${esc(val)}</div>
+    </div>`
+  ).join('');
+
+  const kwHtml = e.keywords
+    ? `<div class="detail-row">
+        <div class="detail-label">KEYWORDS</div>
+        <div class="kw-wrap">${
+          e.keywords.split(/[,\s　]+/).filter(k => k)
+            .map(k => `<span class="kw">${esc(k)}</span>`).join('')
+        }</div>
+      </div>`
+    : '';
+
+  const hasDetail = fields.length > 0 || e.keywords;
+
+  return `
+<div class="entry" id="entry-${globalIdx}" style="animation-delay:${delay}ms">
+  <div class="dot-wrap"><div class="dot ${e.level}"></div></div>
+  <div class="card ${e.level}">
+    <div class="card-header">
+      <span class="badge ${e.level}">${e.level.toUpperCase()}</span>
+      ${dateHtml}
+      ${pillHtml}
     </div>
-    <div id="toggle-wrap">
-      <a id="timeline-btn" href="#" onclick="openTimeline(); return false;" title="Timeline Viewer">
-        <span class="material-icons">timeline</span>
-      </a>
-      <button id="tts-btn" onclick="toggleTts()" title="音声読み上げ ON/OFF">
-        <span class="material-icons" id="tts-icon">volume_off</span>
-      </button>
-      <button id="settings-btn" onclick="openSettings()" title="パートナー設定">
-        <span class="material-icons">settings</span>
-      </button>
-      <div class="switch-container">
-        <span id="mode-label">記録</span>
-        <div id="switch-border">
-          <label class="switch">
-            <input type="checkbox" id="ai-toggle" onchange="toggleMode()">
-            <span class="slider"></span>
-          </label>
-        </div>
-      </div>
-    </div>
+    <div class="summary">${esc(e.summary)}</div>
+    ${hasDetail ? `
+    <button class="toggle-btn" onclick="toggleDetail(${globalIdx},this)">▶ 詳細を見る</button>
+    <div class="detail" id="detail-${globalIdx}">
+      ${detailRows}${kwHtml}
+    </div>` : ''}
   </div>
+</div>`;
+}
 
-  <!-- Daily Compass -->
-  <div id="compass-card" class="glass">
-    <div id="compass-collapsed" onclick="toggleCompass()">
-      <span id="compass-phase-badge">🌅 朝</span>
-      <span id="compass-summary">TOP3を設定してください</span>
-      <button id="compass-edit-btn" onclick="openCompassEdit(event)">✏️</button>
-      <button id="compass-toggle-btn">▼</button>
-    </div>
-    <div id="compass-expanded">
-      <div class="compass-section">
-        <div class="compass-section-label">🎯 今週のTOP3</div>
-        <ul class="compass-top3-list">
-          <li class="compass-top3-item"><span class="compass-top3-num">1.</span><span id="c-top1" class="compass-top3-text empty">未設定</span></li>
-          <li class="compass-top3-item"><span class="compass-top3-num">2.</span><span id="c-top2" class="compass-top3-text empty">未設定</span></li>
-          <li class="compass-top3-item"><span class="compass-top3-num">3.</span><span id="c-top3" class="compass-top3-text empty">未設定</span></li>
-        </ul>
-      </div>
-      <div class="compass-section">
-        <div class="compass-section-label">📌 今日の宣言 <span id="compass-date" style="font-weight:400;text-transform:none;letter-spacing:0;"></span></div>
-        <div id="compass-daily-display" class="compass-daily-text empty">（宣言なし — TOP3達成を目指してコーチングします）</div>
-      </div>
-    </div>
-  </div>
+function toggleDetail(id, btn) {
+  const el = document.getElementById('detail-' + id);
+  const open = el.classList.toggle('open');
+  btn.textContent = open ? '▼ 閉じる' : '▶ 詳細を見る';
+}
 
-  <!-- Chat -->
-  <div id="chat-area">
-    <div class="bubble system">あなたの貴重な言葉を宇宙に刻んでください。</div>
-  </div>
+function buildChart(dailyEntries) {
+  const sorted = [...dailyEntries]
+    .filter(e => e.date)
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
 
-  <!-- BGM -->
-  <audio id="bgm-audio" src="./AI_PARTNER_SYNC_BGM.m4a" loop preload="metadata"></audio>
+  if (!sorted.length) return;
 
-  <div id="synth-overlay" onclick="closeSynthPanel()"></div>
+  const labels = sorted.map(e => e.date.substring(5));
+  const scores = sorted.map(e => e.score || 0);
+  const pointColors = scores.map(s =>
+    s >= 500 ? '#f59e0b' : s >= 350 ? '#34d399' : s >= 200 ? '#fb923c' : '#f87171'
+  );
 
-  <!-- Synthesis bottom-sheet -->
-  <div id="synth-panel">
-    <div id="synth-panel-card">
-      <div id="synth-panel-title">⚗️ 叡智の蒸留 — Synthesis</div>
-      <div class="synthesis-row">
-        <button class="synth-btn" onclick="openSynthesisModal('Daily')">
-          <span class="synth-icon">📅</span><span class="synth-label">Daily</span>
-        </button>
-        <button class="synth-btn" onclick="openSynthesisModal('Weekly')">
-          <span class="synth-icon">📆</span><span class="synth-label">Weekly</span>
-        </button>
-        <button class="synth-btn" onclick="openSynthesisModal('Monthly')">
-          <span class="synth-icon">🗓</span><span class="synth-label">Monthly</span>
-        </button>
-        <button class="synth-btn" onclick="openSynthesisModal('Yearly')">
-          <span class="synth-icon">✨</span><span class="synth-label">Yearly</span>
-        </button>
-      </div>
-    </div>
-  </div>
+  const ctx = document.getElementById('emotionChart').getContext('2d');
+  if (emotionChart) emotionChart.destroy();
 
-  <!-- Synthesis date-picker modal -->
-  <div id="synth-modal" style="display:none;">
-    <div id="synth-modal-card">
-      <div id="synth-modal-title"></div>
-      <div id="synth-modal-message"></div>
-      <input id="synth-modal-input" type="date">
-      <div class="synth-modal-btns">
-        <button class="btn-cancel" onclick="closeSynthesisModal()">キャンセル</button>
-        <button class="btn-execute" onclick="executeSynthesis()">実行</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Footer -->
-  <div class="footer glass">
-    <div class="save-row">
-      <div id="bgm-control">
-        <button id="bgm-toggle" onclick="toggleBgm()" title="BGM ON/OFF">
-          <span class="material-icons" id="bgm-icon">volume_off</span>
-        </button>
-        <button id="bgm-slider-toggle" onclick="toggleBgmSlider()">▲</button>
-        <input type="range" id="bgm-slider" min="0" max="100" value="8" oninput="setBgmVolume(this.value)">
-      </div>
-      <button id="synth-trigger" onclick="toggleSynthPanel()">⚗️ 蒸留</button>
-      <div id="save-area">
-        <button id="save-btn" onclick="saveConversation()">
-          <span class="material-icons" style="font-size:18px;">save</span>
-          会話ログを保存して終了
-        </button>
-      </div>
-    </div>
-    <div class="input-row">
-      <button id="mic-btn" class="icon-btn" onclick="toggleRecording()">
-        <span class="material-icons">mic</span>
-      </button>
-      <textarea id="text-input" rows="1" placeholder="思考を入力… (送信は→ボタン または 音声「送信」)"></textarea>
-      <button id="send-btn" class="icon-btn" onclick="handleSend()">
-        <span class="material-icons">send</span>
-      </button>
-    </div>
-  </div>
-
-  <script>
-    const NEXT_API_BASE_URL = null;
-    const GP_STORAGE_KEY = 'gp_public_v1';
-
-    function loadFromStorage() {
-      try { return JSON.parse(localStorage.getItem(GP_STORAGE_KEY) || '{}'); } catch(e) { return {}; }
-    }
-    function saveToStorage(data) {
-      try { localStorage.setItem(GP_STORAGE_KEY, JSON.stringify({ ...loadFromStorage(), ...data })); } catch(e) {}
-    }
-
-    const _saved = loadFromStorage();
-    let webAppUrl   = _saved.webAppUrl   || '';
-    let userName    = _saved.userName    || 'あなた';
-    let aiName      = _saved.aiName      || 'AI';
-    let ttsVoice    = _saved.ttsVoice    || 'ja-JP-Neural2-C';
-    let ttsRate     = (_saved.ttsRate    != null) ? _saved.ttsRate  : 0.93;
-    let ttsPitch    = (_saved.ttsPitch   != null) ? _saved.ttsPitch : 0.0;
-    let ttsEnabled  = false;
-    let currentAudio = null;
-    let _ttsCtx = null;
-    let _ttsSrc = null;
-    // 個人情報（生年月日・性別・APIキー）はGASのUserProperties（サイドバー）でのみ管理。
-    // ブラウザには保存しない。GASがUserPropertiesから気質を読んでOracleに注入する。
-
-    /* ── iOS --vh フォールバック ── */
-    (function() {
-      function setVH() { document.documentElement.style.setProperty('--vh', window.innerHeight * 0.01 + 'px'); }
-      setVH();
-      window.addEventListener('resize', setVH);
-      window.addEventListener('orientationchange', function() { setTimeout(setVH, 100); });
-    })();
-
-    /* ══════════════════════════════════════════
-       SYNAPSE BACKGROUND
-    ══════════════════════════════════════════ */
-    (function initSynapse() {
-      const canvas = document.getElementById('synapse-canvas');
-      const ctx    = canvas.getContext('2d');
-      const NODE_COUNT=72, MAX_DIST=200, ATTRACT_DIST=90, REPEL_DIST=55;
-      const ATTRACT_FORCE=0.0006, REPEL_FORCE=0.035, MAX_SPEED=0.7;
-      const CURRENT_SPD_MIN=0.0020, CURRENT_SPD_MAX=0.0050;
-      const TAIL_MIN=0.10, TAIL_MAX=0.25, MAX_CURRENTS=35, SPAWN_CHANCE=0.022;
-      const MAX_CHAIN_DEPTH=14, CHAIN_DIM=0.92;
-      let nodes=[], currents=[];
-      function resize() { canvas.width=window.innerWidth; canvas.height=window.innerHeight; }
-      function initNodes() {
-        const w=canvas.width, h=canvas.height;
-        const cols=Math.ceil(Math.sqrt(NODE_COUNT*(w/h))), rows=Math.ceil(NODE_COUNT/cols);
-        const cellW=w/cols, cellH=h/rows, margin=0.15, pos=[];
-        for(let r=0;r<rows&&pos.length<NODE_COUNT;r++) for(let c=0;c<cols&&pos.length<NODE_COUNT;c++) pos.push({x:cellW*(c+margin+Math.random()*(1-margin*2)),y:cellH*(r+margin+Math.random()*(1-margin*2))});
-        for(let i=pos.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pos[i],pos[j]]=[pos[j],pos[i]];}
-        nodes=pos.slice(0,NODE_COUNT).map(({x,y})=>{const a=Math.random()*Math.PI*2,s=0.1+Math.random()*0.2;return{x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,radius:0.6+Math.random()*0.8,pulse:Math.random()*Math.PI*2,pulseSpeed:0.014+Math.random()*0.014,flash:0,flashDecay:0.018+Math.random()*0.010,lastSentTo:-1};});
-        currents=[];
-      }
-      function getEdges(){const edges=[];for(let i=0;i<nodes.length;i++)for(let j=i+1;j<nodes.length;j++){const dx=nodes[i].x-nodes[j].x,dy=nodes[i].y-nodes[j].y;if(Math.sqrt(dx*dx+dy*dy)<MAX_DIST)edges.push([i,j]);}return edges;}
-      function spawnCurrent(edges){if(!edges.length)return;const[a,b]=edges[Math.floor(Math.random()*edges.length)];const[from,to]=Math.random()<0.5?[a,b]:[b,a];currents.push({fromIdx:from,toIdx:to,progress:0,speed:CURRENT_SPD_MIN+Math.random()*(CURRENT_SPD_MAX-CURRENT_SPD_MIN),brightness:0.75+Math.random()*0.25,tailLength:TAIL_MIN+Math.random()*(TAIL_MAX-TAIL_MIN),chainDepth:0,prevIdx:from});}
-      function continueChain(arrivedAt,cameFrom,speed,brightness,tailLength,chainDepth){nodes[arrivedAt].flash=Math.min(1.0,brightness*1.15);if(chainDepth>=MAX_CHAIN_DEPTH)return;const candidates=[];for(let j=0;j<nodes.length;j++){if(j===arrivedAt||j===cameFrom)continue;const dx=nodes[arrivedAt].x-nodes[j].x,dy=nodes[arrivedAt].y-nodes[j].y;if(Math.sqrt(dx*dx+dy*dy)<MAX_DIST)candidates.push(j);}const nextTo=candidates.length?candidates[Math.floor(Math.random()*candidates.length)]:cameFrom;nodes[arrivedAt].lastSentTo=nextTo;currents.push({fromIdx:arrivedAt,toIdx:nextTo,progress:0,speed,brightness:brightness*CHAIN_DIM,tailLength,chainDepth:chainDepth+1,prevIdx:arrivedAt});}
-      function draw(){ctx.clearRect(0,0,canvas.width,canvas.height);for(let i=0;i<nodes.length;i++)for(let j=i+1;j<nodes.length;j++){const a=nodes[i],b=nodes[j],dx=b.x-a.x,dy=b.y-a.y;const dist=Math.sqrt(dx*dx+dy*dy)||0.001,nx=dx/dist,ny=dy/dist;if(dist<REPEL_DIST){const f=REPEL_FORCE*(1-dist/REPEL_DIST);a.vx-=nx*f;a.vy-=ny*f;b.vx+=nx*f;b.vy+=ny*f;}else if(dist<ATTRACT_DIST){const f=ATTRACT_FORCE*(1-dist/ATTRACT_DIST);a.vx+=nx*f;a.vy+=ny*f;b.vx-=nx*f;b.vy-=ny*f;}}for(const n of nodes){const spd=Math.sqrt(n.vx*n.vx+n.vy*n.vy);if(spd>MAX_SPEED){n.vx=(n.vx/spd)*MAX_SPEED;n.vy=(n.vy/spd)*MAX_SPEED;}if(spd<0.03){n.vx+=(Math.random()-0.5)*0.03;n.vy+=(Math.random()-0.5)*0.03;}n.x+=n.vx;n.y+=n.vy;n.pulse+=n.pulseSpeed;n.flash=Math.max(0,n.flash-n.flashDecay);if(n.x<0||n.x>canvas.width)n.vx*=-1;if(n.y<0||n.y>canvas.height)n.vy*=-1;}const edges=getEdges();if(currents.length<MAX_CURRENTS&&Math.random()<SPAWN_CHANCE)spawnCurrent(edges);for(const[i,j]of edges){const a=nodes[i],b=nodes[j],dx=a.x-b.x,dy=a.y-b.y;const dist=Math.sqrt(dx*dx+dy*dy),t=1-dist/MAX_DIST;const isBridge=(a.flash>0.05&&a.lastSentTo===j)||(b.flash>0.05&&b.lastSentTo===i);if(isBridge){const bGrad=ctx.createLinearGradient(a.x,a.y,b.x,b.y);bGrad.addColorStop(0,`rgba(240,192,64,${a.flash*0.6})`);bGrad.addColorStop(1,`rgba(240,192,64,${b.flash*0.6})`);ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.strokeStyle=bGrad;ctx.lineWidth=1.0+Math.max(a.flash,b.flash)*0.55*1.5;ctx.stroke();}else{const alpha=Math.pow(t,2.2)*0.13+Math.max(a.flash,b.flash)*0.12;ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.strokeStyle=`rgba(210,225,255,${Math.min(alpha,0.45)})`;ctx.lineWidth=0.5;ctx.stroke();}}currents=currents.filter((cur)=>{cur.progress+=cur.speed;if(cur.progress>=1.0){continueChain(cur.toIdx,cur.fromIdx,cur.speed,cur.brightness,cur.tailLength,cur.chainDepth);return false;}const from=nodes[cur.fromIdx],to=nodes[cur.toIdx];const hx=from.x+(to.x-from.x)*cur.progress,hy=from.y+(to.y-from.y)*cur.progress;const ts=Math.max(0,cur.progress-cur.tailLength);const tx=from.x+(to.x-from.x)*ts,ty2=from.y+(to.y-from.y)*ts;const lineGrad=ctx.createLinearGradient(tx,ty2,hx,hy);lineGrad.addColorStop(0,`rgba(240,192,64,0)`);lineGrad.addColorStop(0.5,`rgba(240,192,64,${cur.brightness*0.35})`);lineGrad.addColorStop(1,`rgba(255,245,180,${cur.brightness})`);ctx.beginPath();ctx.moveTo(tx,ty2);ctx.lineTo(hx,hy);ctx.strokeStyle=lineGrad;ctx.lineWidth=1.6;ctx.stroke();const gR=5+cur.brightness*2;const gGrad=ctx.createRadialGradient(hx,hy,0,hx,hy,gR);gGrad.addColorStop(0,`rgba(255,255,220,${cur.brightness})`);gGrad.addColorStop(0.3,`rgba(255,210,80,${cur.brightness*0.9})`);gGrad.addColorStop(1,`rgba(240,192,64,0)`);ctx.beginPath();ctx.arc(hx,hy,gR,0,Math.PI*2);ctx.fillStyle=gGrad;ctx.fill();return true;});for(const n of nodes){const glow=(Math.sin(n.pulse)+1)/2,flash=n.flash,r=n.radius+glow*0.6+flash*4;if(flash>0.01){const isStage1=flash>0.65,coreG=isStage1?248:200,coreB=isStage1?180:80;const bR=r*(isStage1?7:5.5),burst=ctx.createRadialGradient(n.x,n.y,0,n.x,n.y,bR);burst.addColorStop(0,`rgba(255,${coreG},${coreB},${flash*0.95})`);burst.addColorStop(0.25,`rgba(240,192,64,${flash*0.65})`);burst.addColorStop(0.6,`rgba(240,150,0,${flash*0.2})`);burst.addColorStop(1,`rgba(240,192,64,0)`);ctx.beginPath();ctx.arc(n.x,n.y,bR,0,Math.PI*2);ctx.fillStyle=burst;ctx.fill();if(isStage1){const ringR=r*9*(1-flash+0.4);ctx.beginPath();ctx.arc(n.x,n.y,ringR,0,Math.PI*2);ctx.strokeStyle=`rgba(255,220,80,${flash*0.3})`;ctx.lineWidth=1.2;ctx.stroke();}ctx.beginPath();ctx.arc(n.x,n.y,r,0,Math.PI*2);ctx.fillStyle=`rgba(255,${coreG},${coreB},${0.8+flash*0.2})`;ctx.fill();}else{const oG=ctx.createRadialGradient(n.x,n.y,0,n.x,n.y,r*3);oG.addColorStop(0,`rgba(220,230,255,${0.12+glow*0.08})`);oG.addColorStop(1,`rgba(220,230,255,0)`);ctx.beginPath();ctx.arc(n.x,n.y,r*3,0,Math.PI*2);ctx.fillStyle=oG;ctx.fill();ctx.beginPath();ctx.arc(n.x,n.y,r,0,Math.PI*2);ctx.fillStyle=`rgba(220,230,255,${0.45+glow*0.2})`;ctx.fill();}}requestAnimationFrame(draw);}
-      function onResize(){resize();initNodes();}
-      resize();initNodes();draw();
-      window.addEventListener('resize',onResize);
-    })();
-
-    /* ══════════════════════════════════════════
-       BGM — AudioBufferSource + GainNode (iOS音量調節完全対応)
-       <audio>要素は使わず fetch→decodeAudioData で再生
-    ══════════════════════════════════════════ */
-    let bgmPlaying  = false;
-    let _bgmCtx     = null;
-    let _bgmGain    = null;
-    let _bgmBuffer  = null;
-    let _bgmSrc     = null;
-    let _bgmLoading = false;
-
-    async function toggleBgm() {
-      if (_bgmLoading) return;
-      const icon = document.getElementById('bgm-icon');
-      if (!bgmPlaying) {
-        _bgmLoading = true;
-        try {
-          if (!_bgmCtx) {
-            _bgmCtx  = new (window.AudioContext || window.webkitAudioContext)();
-            _bgmGain = _bgmCtx.createGain();
-            _bgmGain.gain.value = (parseInt(document.getElementById('bgm-slider').value) || 8) / 100;
-            _bgmGain.connect(_bgmCtx.destination);
-          }
-          if (_bgmCtx.state === 'suspended') await _bgmCtx.resume();
-          if (!_bgmBuffer) {
-            const resp = await fetch('./AI_PARTNER_SYNC_BGM.m4a');
-            if (!resp.ok) throw new Error('file not found');
-            _bgmBuffer = await _bgmCtx.decodeAudioData(await resp.arrayBuffer());
-          }
-          if (_bgmSrc) { try { _bgmSrc.stop(); } catch(e) {} }
-          _bgmSrc = _bgmCtx.createBufferSource();
-          _bgmSrc.buffer = _bgmBuffer; _bgmSrc.loop = true;
-          _bgmSrc.connect(_bgmGain); _bgmSrc.start(0);
-          bgmPlaying = true; icon.textContent = 'volume_up';
-        } catch(e) {
-          const ctrl = document.getElementById('bgm-control');
-          ctrl.style.opacity = '0.35'; ctrl.style.pointerEvents = 'none';
-          ctrl.title = 'BGMファイルが読み込めませんでした';
-        }
-        _bgmLoading = false;
-      } else {
-        if (_bgmSrc) { try { _bgmSrc.stop(); } catch(e) {} _bgmSrc = null; }
-        bgmPlaying = false; icon.textContent = 'volume_off';
-      }
-    }
-    function setBgmVolume(val) { if (_bgmGain) _bgmGain.gain.value = val / 100; }
-    function toggleBgmSlider() {
-      const slider=document.getElementById('bgm-slider'), btn=document.getElementById('bgm-slider-toggle');
-      const isOpen=slider.classList.toggle('open');
-      btn.textContent=isOpen?'▼':'▲';
-    }
-
-    /* ══════════════════════════════════════════
-       マイク — SpeechRecognition非対応ブラウザでもクラッシュしない遅延初期化
-    ══════════════════════════════════════════ */
-    const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
-    let recognition  = null;
-    let isRecording  = false;
-    let silenceTimer = null;
-    const SILENCE_DELAY = 800;
-
-    function initMic() {
-      if (!SpeechRecognitionAPI) {
-        document.getElementById('mic-btn').classList.add('disabled-mic');
-        document.getElementById('mic-btn').title = 'このブラウザは音声入力に対応していません';
-        return;
-      }
-      try {
-        recognition = new SpeechRecognitionAPI();
-        recognition.lang = 'ja-JP';
-        recognition.continuous = true;
-        recognition.interimResults = false;
-        recognition.onstart = () => {
-          isRecording = true;
-          document.getElementById('mic-btn').classList.add('recording');
-          textInput.placeholder = "音声認識中…";
-        };
-        recognition.onend = () => {
-          isRecording = false;
-          document.getElementById('mic-btn').classList.remove('recording');
-          textInput.placeholder = "思考を入力… (送信は→ボタン または 音声「送信」)";
-          clearTimeout(silenceTimer);
-        };
-        recognition.onresult = (e) => {
-          let transcript = "";
-          for (let i = e.resultIndex; i < e.results.length; ++i)
-            if (e.results[i].isFinal) transcript += e.results[i][0].transcript;
-          if (!transcript) return;
-          clearTimeout(silenceTimer);
-          const keyword = transcript.trim().replace(/[。、！!？?\s…　]+$/, '');
-          if (keyword === '送信') { handleSend(); return; }
-          textInput.value += transcript;
-          autoResize(textInput);
-          silenceTimer = setTimeout(() => {
-            if (isRecording && textInput.value && !textInput.value.endsWith('\n')) {
-              textInput.value += '\n'; autoResize(textInput);
+  emotionChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        data: scores,
+        borderColor: 'rgba(245,158,11,0.7)',
+        backgroundColor: (context) => {
+          const grad = context.chart.ctx.createLinearGradient(0, 0, 0, 150);
+          grad.addColorStop(0, 'rgba(245,158,11,0.15)');
+          grad.addColorStop(1, 'rgba(245,158,11,0)');
+          return grad;
+        },
+        pointBackgroundColor: pointColors,
+        pointBorderColor: pointColors,
+        pointRadius: 4,
+        pointHoverRadius: 7,
+        tension: 0.35,
+        fill: true,
+        borderWidth: 2,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1e293b',
+          titleColor: '#94a3b8',
+          bodyColor: '#e2e8f0',
+          callbacks: {
+            title: (items) => sorted[items[0].dataIndex].date,
+            label: (item) => {
+              const e = sorted[item.dataIndex];
+              return ` ${e.emotion || '—'} (${e.score})`;
             }
-          }, SILENCE_DELAY);
-        };
-        recognition.onerror = (e) => addBubble("⚠️ マイクエラー: " + e.error, 'system');
-      } catch(e) {
-        console.warn('SpeechRecognition init failed:', e);
-        recognition = null;
-      }
-    }
-
-    function toggleRecording() {
-      if (!recognition) { addBubble("⚠️ このブラウザは音声入力に対応していません", 'system'); return; }
-      isRecording ? recognition.stop() : recognition.start();
-    }
-
-    /* ══════════════════════════════════════════
-       Chat Logic
-    ══════════════════════════════════════════ */
-    let conversationHistory = "";
-    const textInput = document.getElementById('text-input');
-    const chatArea  = document.getElementById('chat-area');
-    const aiToggle  = document.getElementById('ai-toggle');
-
-    function handleSend() {
-      const text = textInput.value.trim();
-      if (!text) return;
-      if (isRecording && recognition) recognition.stop();
-      clearTimeout(silenceTimer);
-      addBubble(text, 'user');
-      textInput.value = ""; textInput.style.height = 'auto';
-      conversationHistory += `[${userName}]: ${text}\n`;
-      if (aiToggle.checked) requestAiReply(text);
-    }
-
-    function requestAiReply(userText) {
-      const loadingId = addLoading();
-      postToGas("ai_chat", userText, conversationHistory, (data) => {
-        removeLoading(loadingId);
-        const reply = (data && data.reply) ? data.reply : '（返答を受信できませんでした）';
-        addBubble(reply, 'titan');
-        conversationHistory += `[${aiName}]: ${reply}\n`;
-        speakText(reply);
-      });
-    }
-
-    function saveConversation() {
-      if (!conversationHistory) { addBubble("⚠️ 保存する会話がありません", 'system'); return; }
-      addBubble("アーカイブへ送信中…", 'system');
-      const snapshot = conversationHistory;
-      const uid = new URLSearchParams(window.location.search).get('uid');
-      postToGas("save", snapshot, null, () => {
-        addBubble("✅ Genesis Sheet に記録完了。", 'system');
-        if (uid && NEXT_API_BASE_URL) {
-          fetch(`${NEXT_API_BASE_URL}/api/genesis`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ uid, content: snapshot, oracleEnabled: false }),
-          })
-          .then(r => r.json())
-          .then(() => { addBubble("📡 genesis_log（Firestore）にも記録完了。セッションをリセットします。", 'system'); conversationHistory = ""; })
-          .catch(err => { console.warn('[Genesis] Firestore sync error:', err); addBubble("⚠️ Firestore 記録に失敗（Sheets のみ保存済）。セッションをリセットします。", 'system'); conversationHistory = ""; });
-        } else {
-          addBubble("✅ 保存完了。セッションをリセットします。", 'system');
-          conversationHistory = "";
-        }
-      });
-    }
-
-    function postToGas(type, text, history, callback) {
-      if (!webAppUrl || !webAppUrl.includes("/macros/s/")) {
-        addBubble("⚠️ GASウェブアプリURLが設定されていません。⚙️パートナー設定から設定してください", 'system');
-        return;
-      }
-      const compass = getCompassContext();
-      fetch(webAppUrl, {
-        method: "POST", redirect: "follow",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ type, fullText: text, history, userName, aiName,
-          weeklyTop3: compass.weeklyTop3,
-          dailyDeclaration: compass.dailyDeclaration,
-          phase: compass.phase,
-          phaseLabel: compass.phaseLabel,
-        }),
-      })
-      .then(r => r.json())
-      .then(data => {
-        if (callback) { callback(data); }
-        else {
-          if (data.status === 'success') addBubble("✅ スプレッドシートに記録完了", 'system');
-          if (data.oracle) addBubble("🔮 " + data.oracle, 'titan');
-        }
-      })
-      .catch(err => {
-        console.error("Titan Comms Error:", err);
-        if (callback) { callback({ reply: '（通信エラーだ。パイプの接続を確認してくれ）' }); }
-        else { addBubble("⚠️ 通信エラー: 記録に失敗した", 'system'); }
-      });
-    }
-
-    function toggleMode() {
-      document.getElementById('mode-label').innerText = aiToggle.checked ? "AI対話" : "記録";
-    }
-
-    /* ══════════════════════════════════════════
-       初回セットアップ
-    ══════════════════════════════════════════ */
-    function checkInitialSetup() {
-      if (!webAppUrl || !webAppUrl.includes('/macros/s/')) {
-        document.getElementById('setup-overlay').classList.add('open');
-      }
-    }
-
-    function saveInitialSetup() {
-      const url = document.getElementById('setup-gas-url').value.trim();
-      if (!url.includes('/macros/s/')) {
-        alert('⚠️ 正しいGASウェブアプリURL（/exec で終わるURL）を入力してください'); return;
-      }
-      const btn = document.getElementById('setup-save-btn');
-      btn.disabled = true; btn.textContent = '接続中...';
-      webAppUrl = url;
-      saveToStorage({ webAppUrl: url });
-      btn.textContent = '接続完了！';
-      setTimeout(function() {
-        document.getElementById('setup-overlay').classList.remove('open');
-      }, 600);
-    }
-
-    /* ══════════════════════════════════════════
-       設定モーダル
-    ══════════════════════════════════════════ */
-    function openTimeline() {
-      window.location.href = './Timeline_Viewer.html';
-    }
-
-    function openSettings() {
-      document.getElementById('settings-user-name').value = userName;
-      document.getElementById('settings-ai-name').value   = aiName;
-      const display = document.getElementById('settings-url-display');
-      display.textContent = webAppUrl || '未設定';
-      display.title = webAppUrl || '';
-      document.getElementById('settings-gas-url-input').value = webAppUrl || '';
-      document.getElementById('settings-url-edit').classList.remove('open');
-const btn = document.getElementById('settings-save-btn');
-      btn.disabled = false; btn.textContent = '保存する';
-      // TTS設定をフォームに反映
-      document.getElementById('settings-tts-voice').value = ttsVoice;
-      const rEl = document.getElementById('settings-tts-rate');
-      const pEl = document.getElementById('settings-tts-pitch');
-      if (rEl) { rEl.value = ttsRate; document.getElementById('rate-val').textContent = parseFloat(ttsRate).toFixed(2); }
-      if (pEl) { pEl.value = ttsPitch; document.getElementById('pitch-val').textContent = parseFloat(ttsPitch).toFixed(1); }
-      document.getElementById('settings-overlay').classList.add('open');
-    }
-    function closeSettings() {
-      document.getElementById('settings-overlay').classList.remove('open');
-    }
-    function handleOverlayClick(e) {
-      if (e.target === document.getElementById('settings-overlay')) closeSettings();
-    }
-    function toggleUrlEdit() {
-      document.getElementById('settings-url-edit').classList.toggle('open');
-    }
-    function copyGasUrl() {
-      if (!webAppUrl) { alert('URLが設定されていません'); return; }
-      navigator.clipboard.writeText(webAppUrl).then(function() {
-        const btn = document.querySelector('.settings-url-copy-btn');
-        const icon = btn.querySelector('.material-icons');
-        icon.textContent = 'check'; btn.style.color = '#4caf50';
-        setTimeout(function() { icon.textContent = 'content_copy'; btn.style.color = ''; }, 1500);
-      }).catch(function() { prompt('URLをコピーしてください:', webAppUrl); });
-    }
-    function saveSettings() {
-      const newUserName  = document.getElementById('settings-user-name').value.trim();
-      const newAiName    = document.getElementById('settings-ai-name').value.trim();
-      if (!newUserName || !newAiName) { alert('両方の名前を入力してください'); return; }
-      const newTtsVoice  = document.getElementById('settings-tts-voice').value;
-      const newTtsRate   = parseFloat(document.getElementById('settings-tts-rate').value);
-      const newTtsPitch  = parseFloat(document.getElementById('settings-tts-pitch').value);
-      ttsVoice = newTtsVoice; ttsRate = newTtsRate; ttsPitch = newTtsPitch;
-      const urlInput   = document.getElementById('settings-gas-url-input').value.trim();
-      const urlEditOpen = document.getElementById('settings-url-edit').classList.contains('open');
-      if (urlEditOpen && urlInput && !urlInput.includes('/macros/s/')) {
-        alert('⚠️ 正しいGASウェブアプリURL（/exec で終わるURL）を入力してください'); return;
-      }
-      const btn = document.getElementById('settings-save-btn');
-      btn.disabled = true; btn.textContent = '保存中...';
-      if (urlEditOpen && urlInput) { webAppUrl = urlInput; }
-      userName = newUserName; aiName = newAiName;
-      // 生年月日・性別を取得・保存
-      saveToStorage({ webAppUrl, userName, aiName, ttsVoice, ttsRate, ttsPitch });
-
-      btn.textContent = '保存完了！';
-      setTimeout(closeSettings, 700);
-    }
-
-    /* ══════════════════════════════════════════
-       Synthesis Logic
-    ══════════════════════════════════════════ */
-    let currentSynthesisType = null;
-
-    function toggleSynthPanel() {
-      const panel=document.getElementById('synth-panel'), overlay=document.getElementById('synth-overlay');
-      const isOpen=panel.classList.toggle('open');
-      overlay.classList.toggle('open', isOpen);
-    }
-    function closeSynthPanel() {
-      document.getElementById('synth-panel').classList.remove('open');
-      document.getElementById('synth-overlay').classList.remove('open');
-    }
-    function openSynthesisModal(type) {
-      closeSynthPanel();
-      currentSynthesisType = type;
-      const now=new Date(), y=now.getFullYear();
-      const m=String(now.getMonth()+1).padStart(2,'0'), d=String(now.getDate()).padStart(2,'0');
-      const configs = {
-        Daily:   { label: '対象の日付を選択してください',      inputType: 'date',   value: `${y}-${m}-${d}` },
-        Weekly:  { label: '起算日（最終日）を選択してください', inputType: 'date',   value: `${y}-${m}-${d}` },
-        Monthly: { label: '対象月を選択してください',          inputType: 'month',  value: `${y}-${m}` },
-        Yearly:  { label: '対象年を入力してください',          inputType: 'number', value: String(y) },
-      };
-      const cfg = configs[type];
-      document.getElementById('synth-modal-title').textContent   = `⚗️ ${type} まとめ`;
-      document.getElementById('synth-modal-message').textContent = cfg.label;
-      const input = document.getElementById('synth-modal-input');
-      input.type = cfg.inputType; input.value = cfg.value;
-      if (cfg.inputType === 'number') { input.min = '2020'; input.max = String(y+1); }
-      document.getElementById('synth-modal').style.display = 'flex';
-    }
-    function closeSynthesisModal() {
-      document.getElementById('synth-modal').style.display = 'none';
-      currentSynthesisType = null;
-    }
-    function executeSynthesis() {
-      const type=currentSynthesisType, val=document.getElementById('synth-modal-input').value;
-      if (!val) { alert('値を選択してください'); return; }
-      closeSynthesisModal();
-      const targetStr = val.replace(/-/g, '/');
-      addBubble(`⚗️ ${type}まとめを生成中… (${targetStr})`, 'system');
-      fetch(webAppUrl, {
-        method: 'POST', redirect: 'follow',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ type: 'synthesis', synthesisType: type, targetStr }),
-      })
-      .then(r => r.json())
-      .then(data => {
-        if (data.status === 'success') addBubble(`✅ ${type}まとめをスプレッドシートに記録しました。`, 'system');
-        else addBubble(`⚠️ エラー: ${data.message || '不明なエラー'}`, 'system');
-      })
-      .catch(err => addBubble(`⚠️ 通信エラー: ${err.message}`, 'system'));
-    }
-
-    /* ── Helpers ── */
-    function addBubble(text, type) {
-      const div = document.createElement('div');
-      div.className = `bubble ${type}`;
-      div.innerHTML = text.replace(/\n/g, '<br>');
-      chatArea.appendChild(div); chatArea.scrollTop = chatArea.scrollHeight;
-    }
-    function addLoading() {
-      const id='loading-'+Date.now(), div=document.createElement('div');
-      div.id=id; div.className='bubble titan';
-      div.innerHTML='<div class="typing-indicator"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>';
-      chatArea.appendChild(div); chatArea.scrollTop=chatArea.scrollHeight; return id;
-    }
-    function removeLoading(id) { const el=document.getElementById(id); if(el)el.remove(); }
-    function autoResize(el) { el.style.height='auto'; el.style.height=el.scrollHeight+'px'; }
-    textInput.addEventListener('input', function() { autoResize(this); });
-
-    /* ══════════════════════════════════════════
-       Daily Compass
-    ══════════════════════════════════════════ */
-    let weeklyTop3 = ['', '', ''];
-    let dailyDeclaration = '';
-    let compassExpanded = true;
-    let compassVoiceActive = null;
-    let compassVoiceBtn = null;
-
-    function getPhase() {
-      const h = new Date().getHours();
-      if (h >= 5 && h < 12) return { emoji: '🌅', label: '朝', key: 'morning' };
-      if (h >= 12 && h < 17) return { emoji: '☀️', label: '昼', key: 'midday' };
-      return { emoji: '🌙', label: '夜', key: 'evening' };
-    }
-
-    function getTodayStr() {
-      const d = new Date();
-      return d.getFullYear() + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + String(d.getDate()).padStart(2,'0');
-    }
-
-    function initCompass() {
-      const s = loadFromStorage();
-      weeklyTop3 = s.weeklyTop3 || ['', '', ''];
-      const todayStr = getTodayStr();
-      const saved = s.dailyDeclaration || {};
-      dailyDeclaration = (saved.date === todayStr) ? (saved.text || '') : '';
-      compassExpanded = (s.compassExpanded !== false);
-      renderCompass();
-      if (compassExpanded) document.getElementById('compass-expanded').classList.add('open');
-    }
-
-    function renderCompass() {
-      const phase = getPhase();
-      document.getElementById('compass-phase-badge').textContent = phase.emoji + ' ' + phase.label;
-      const first = weeklyTop3.find(function(t){ return t.trim(); });
-      const count = weeklyTop3.filter(function(t){ return t.trim(); }).length;
-      document.getElementById('compass-summary').textContent = count > 0
-        ? first + (count > 1 ? ' ほか' + (count-1) + '件' : '')
-        : 'TOP3を設定してください';
-      [0,1,2].forEach(function(i) {
-        const el = document.getElementById('c-top' + (i+1));
-        const v = weeklyTop3[i] || '';
-        el.textContent = v || '未設定';
-        el.classList.toggle('empty', !v);
-      });
-      document.getElementById('compass-date').textContent = getTodayStr();
-      const dEl = document.getElementById('compass-daily-display');
-      dEl.textContent = dailyDeclaration || '（宣言なし — TOP3達成を目指してコーチングします）';
-      dEl.classList.toggle('empty', !dailyDeclaration);
-      document.getElementById('compass-toggle-btn').textContent = compassExpanded ? '▲' : '▼';
-    }
-
-    function toggleCompass() {
-      compassExpanded = !compassExpanded;
-      document.getElementById('compass-expanded').classList.toggle('open', compassExpanded);
-      document.getElementById('compass-toggle-btn').textContent = compassExpanded ? '▲' : '▼';
-      saveToStorage({ compassExpanded: compassExpanded });
-    }
-
-    function openCompassEdit(event) {
-      if (event) event.stopPropagation();
-      document.getElementById('cm-top1').value = weeklyTop3[0] || '';
-      document.getElementById('cm-top2').value = weeklyTop3[1] || '';
-      document.getElementById('cm-top3').value = weeklyTop3[2] || '';
-      document.getElementById('cm-daily').value = dailyDeclaration || '';
-      document.getElementById('compass-overlay').classList.add('open');
-    }
-
-    function closeCompassEdit() {
-      document.getElementById('compass-overlay').classList.remove('open');
-      stopCompassVoice();
-    }
-
-    function handleCompassOverlayClick(e) {
-      if (e.target === document.getElementById('compass-overlay')) closeCompassEdit();
-    }
-
-    function saveCompassEdit() {
-      weeklyTop3 = [
-        document.getElementById('cm-top1').value.trim(),
-        document.getElementById('cm-top2').value.trim(),
-        document.getElementById('cm-top3').value.trim(),
-      ];
-      dailyDeclaration = document.getElementById('cm-daily').value.trim();
-      saveToStorage({
-        weeklyTop3: weeklyTop3,
-        dailyDeclaration: { date: getTodayStr(), text: dailyDeclaration }
-      });
-      closeCompassEdit();
-      renderCompass();
-    }
-
-    function startCompassVoice(fieldId, btn) {
-      if (!SpeechRecognitionAPI) { alert('このブラウザは音声入力に対応していません'); return; }
-      if (compassVoiceActive) { stopCompassVoice(); return; }
-      const r = new SpeechRecognitionAPI();
-      r.lang = 'ja-JP'; r.continuous = false; r.interimResults = false;
-      r.onstart = function() { compassVoiceActive = r; compassVoiceBtn = btn; btn.classList.add('recording'); };
-      r.onresult = function(e) {
-        document.getElementById(fieldId).value = Array.from(e.results).map(function(x){ return x[0].transcript; }).join('');
-      };
-      r.onend = function() { stopCompassVoice(); };
-      r.onerror = function() { stopCompassVoice(); };
-      r.start();
-    }
-
-    function stopCompassVoice() {
-      if (compassVoiceActive) { try { compassVoiceActive.stop(); } catch(e){} compassVoiceActive = null; }
-      if (compassVoiceBtn) { compassVoiceBtn.classList.remove('recording'); compassVoiceBtn = null; }
-    }
-
-    function getCompassContext() {
-      const top3Str = weeklyTop3.map(function(t, i){ return (i+1) + '. ' + (t || '（未設定）'); }).join('\n');
-      const phase = getPhase();
-      return { weeklyTop3: top3Str, dailyDeclaration: dailyDeclaration || '', phase: phase.key, phaseLabel: phase.label };
-    }
-
-    /* ── 初期化 ── */
-    initMic();
-    checkInitialSetup();
-    initCompass();
-  
-    /* ── TTS ── */
-    function _getTtsCtx() {
-      if (!_ttsCtx) _ttsCtx = new (window.AudioContext || window.webkitAudioContext)();
-      return _ttsCtx;
-    }
-
-    function toggleTts() {
-      ttsEnabled = !ttsEnabled;
-      const btn = document.getElementById('tts-btn');
-      const icon = document.getElementById('tts-icon');
-      if (ttsEnabled) {
-        // iOS Safari: AudioContextをユーザージェスチャー内で起動してaudio再生を解禁
-        try {
-          const ctx = _getTtsCtx();
-          if (ctx.state === 'suspended') ctx.resume();
-          const buf = ctx.createBuffer(1, 1, 22050);
-          const s = ctx.createBufferSource(); s.buffer = buf;
-          s.connect(ctx.destination); s.start(0);
-        } catch(e) {}
-        icon.textContent = 'record_voice_over'; btn.classList.add('active');
-        addBubble('🔊 音声読み上げ ON', 'system');
-      } else {
-        icon.textContent = 'voice_over_off'; btn.classList.remove('active');
-        if (_ttsSrc) { try { _ttsSrc.stop(); } catch(e) {} _ttsSrc = null; }
-        if (currentAudio) { currentAudio.pause(); currentAudio = null; }
-        window.speechSynthesis && window.speechSynthesis.cancel();
-        addBubble('🔇 音声読み上げ OFF', 'system');
-      }
-    }
-
-    function speakText(text) {
-      if (!ttsEnabled) return;
-      if (currentAudio) { currentAudio.pause(); currentAudio = null; }
-      window.speechSynthesis && window.speechSynthesis.cancel();
-      const plain = text.replace(/<[^>]*>/g, '').replace(/\n+/g, '。').substring(0, 4000);
-      if (!webAppUrl || !webAppUrl.includes('/macros/s/')) { fallbackSpeak(plain); return; }
-      fetch(webAppUrl, {
-        method: 'POST', redirect: 'follow',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ type: 'tts', text: plain, voice: ttsVoice, rate: ttsRate, pitch: ttsPitch })
-      })
-      .then(r => r.json())
-      .then(data => {
-        if (data.audioContent) {
-          // AudioContext経由で再生（iOS Safariのautoplay制限を回避）
-          try {
-            const ctx = _getTtsCtx();
-            const bytes = Uint8Array.from(atob(data.audioContent), c => c.charCodeAt(0));
-            ctx.decodeAudioData(bytes.buffer, function(buffer) {
-              if (_ttsSrc) { try { _ttsSrc.stop(); } catch(e) {} }
-              _ttsSrc = ctx.createBufferSource();
-              _ttsSrc.buffer = buffer;
-              _ttsSrc.connect(ctx.destination);
-              _ttsSrc.start(0);
-              _ttsSrc.onended = function() { _ttsSrc = null; };
-            }, function() { fallbackSpeak(plain); });
-          } catch(e) {
-            currentAudio = new Audio('data:audio/mp3;base64,' + data.audioContent);
-            currentAudio.play().catch(() => fallbackSpeak(plain));
-            currentAudio.onended = () => { currentAudio = null; };
           }
-        } else { fallbackSpeak(plain); }
-      })
-      .catch(() => fallbackSpeak(plain));
+        }
+      },
+      scales: {
+        x: {
+          ticks: { color: '#475569', font: { size: 9 }, maxTicksLimit: 12, maxRotation: 0 },
+          grid:  { color: 'rgba(51,65,85,0.4)' },
+          border: { color: 'transparent' }
+        },
+        y: {
+          min: 0, max: 700,
+          ticks: { color: '#475569', font: { size: 9 }, stepSize: 100 },
+          grid:  { color: 'rgba(51,65,85,0.4)' },
+          border: { color: 'transparent' }
+        }
+      },
+      onClick: (evt, elements) => {
+        if (!elements.length) return;
+        const target = sorted[elements[0].index];
+        const entryIdx = allEntries.findIndex(
+          e => e.date === target.date && e.level === 'Daily'
+        );
+        if (entryIdx < 0) return;
+        if (currentFilter !== 'ALL' && currentFilter !== 'Daily') setFilter('Daily');
+        setTimeout(() => {
+          const el = document.getElementById('entry-' + entryIdx);
+          if (!el) return;
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          const card = el.querySelector('.card');
+          card.classList.add('highlight');
+          setTimeout(() => card.classList.remove('highlight'), 1800);
+        }, 120);
+      }
     }
+  });
+}
 
-    function fallbackSpeak(plain) {
-      if (!window.speechSynthesis) return;
-      window.speechSynthesis.cancel();
-      const utter = new SpeechSynthesisUtterance(plain);
-      utter.lang = 'ja-JP'; utter.rate = ttsRate; utter.pitch = 1.0;
-      const voices = window.speechSynthesis.getVoices();
-      const priority = ['Otoya', 'Google 日本語', 'Kyoko', 'Microsoft Haruka'];
-      let best = null;
-      for (const name of priority) { best = voices.find(v => v.name.includes(name)); if (best) break; }
-      if (!best) best = voices.find(v => v.lang && v.lang.startsWith('ja'));
-      if (best) utter.voice = best;
-      window.speechSynthesis.speak(utter);
-    }
+function esc(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/\n/g, '<br>');
+}
 
-  </script>
+window.onload = loadData;
+</script>
 </body>
 </html>
