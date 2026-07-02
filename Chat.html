@@ -191,7 +191,7 @@ footer {
   <button id="mic-btn" class="icon-btn" onclick="toggleRecording()">
     <span class="material-icons">mic</span>
   </button>
-  <textarea id="text-input" rows="1" placeholder="Titanに話しかける…"></textarea>
+  <textarea id="text-input" rows="1" placeholder="Titanに話しかける…（Cmd+Enterで送信）"></textarea>
   <button id="send-btn" class="icon-btn" onclick="handleSend()">
     <span class="material-icons">send</span>
   </button>
@@ -212,7 +212,7 @@ function autoResize(el) {
 }
 textInput.addEventListener('input', () => autoResize(textInput));
 textInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); handleSend(); }
 });
 
 function addBubble(text, cls) {
@@ -283,7 +283,7 @@ if (SpeechRecognitionAPI) {
   recognition.onend = () => {
     isRecording = false;
     document.getElementById('mic-btn').classList.remove('recording');
-    textInput.placeholder = 'Titanに話しかける…';
+    textInput.placeholder = 'Titanに話しかける…（Cmd+Enterで送信）';
     clearTimeout(silenceTimer);
   };
   recognition.onresult = (e) => {
