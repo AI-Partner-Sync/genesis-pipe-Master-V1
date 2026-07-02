@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>AI Partner Sync — Master Timeline Viewer</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="settings.js"></script>
 <style>
 :root {
   --navy-950: #0a0f1e;
@@ -284,17 +285,15 @@ header h1 { font-size: 16px; font-weight: 700; color: var(--gold); letter-spacin
 </div>
 
 <script>
-// ★ G_Timeline.gsをデプロイ後、ここにWebApp URLを貼り付けてください
-const GAS_API_URL = 'https://script.google.com/macros/s/AKfycby45pWuHOr7mmtoFTX0Vj5DTkmXYPXHixUxZckXhwqsk5cD7wfYwA6D9ShNxOutdhNu/exec';
-
 let allEntries = [];
 let currentFilter = 'ALL';
 let emotionChart = null;
 
 async function loadData() {
   try {
-    const sep = GAS_API_URL.includes('?') ? '&' : '?';
-    const res = await fetch(GAS_API_URL + sep + 'page=timeline_data');
+    const gasUrl = apsLoadSettings().gasUrl;
+    const sep = gasUrl.includes('?') ? '&' : '?';
+    const res = await fetch(gasUrl + sep + 'page=timeline_data');
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     allEntries = Array.isArray(data) ? data : [];
@@ -305,7 +304,7 @@ async function loadData() {
     document.getElementById('timeline').innerHTML =
       `<div class="empty">データ取得に失敗しました。<br>
       <small style="color:#334155">${err.message}</small><br><br>
-      <small>index.html の GAS_API_URL を設定してください。</small></div>`;
+      <small>index.html の設定（⚙️）からGAS URLを確認してください。</small></div>`;
     console.error(err);
   }
 }
