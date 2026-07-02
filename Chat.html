@@ -313,6 +313,26 @@ footer {
   cursor: pointer;
 }
 .settings-btn-save:hover { background: #fcd34d; }
+.tts-switch { position: relative; display: inline-block; width: 40px; height: 22px; flex-shrink: 0; }
+.tts-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+.tts-switch .slider {
+  position: absolute; inset: 0;
+  background: var(--navy-700);
+  border-radius: 22px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.tts-switch .slider::before {
+  content: '';
+  position: absolute;
+  width: 16px; height: 16px;
+  left: 3px; top: 3px;
+  background: #e2e8f0;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+.tts-switch input:checked + .slider { background: var(--gold); }
+.tts-switch input:checked + .slider::before { transform: translateX(18px); background: var(--navy-950); }
 </style>
 </head>
 <body>
@@ -372,9 +392,9 @@ footer {
     <div class="settings-section-title">🔊 音声読み上げ（Cloud TTS）</div>
     <div class="settings-toggle-row">
       <label class="settings-label" style="margin-bottom:0;">Titanの返答を読み上げる</label>
-      <label style="position:relative;display:inline-block;width:40px;height:22px;">
-        <input type="checkbox" id="settings-tts-enabled" style="opacity:0;width:0;height:0;">
-        <span id="tts-toggle-slider" style="position:absolute;inset:0;background:var(--navy-700);border-radius:22px;transition:.2s;cursor:pointer;" onclick="apsToggleTtsSwitch()"></span>
+      <label class="tts-switch">
+        <input type="checkbox" id="settings-tts-enabled">
+        <span class="slider"></span>
       </label>
     </div>
     <label class="settings-label">声の種類</label>
@@ -533,7 +553,6 @@ function apsOpenSettings() {
   document.getElementById('settings-user-name').value = s.userName;
   document.getElementById('settings-ai-name').value   = s.aiName;
   document.getElementById('settings-tts-enabled').checked = s.ttsEnabled;
-  apsRenderTtsSwitch(s.ttsEnabled);
   document.getElementById('settings-tts-voice').value = s.ttsVoice;
   document.getElementById('settings-tts-rate').value = s.ttsRate;
   document.getElementById('rate-val').textContent = parseFloat(s.ttsRate).toFixed(2);
@@ -557,15 +576,6 @@ function apsCopyGasUrl() {
     btn.textContent = 'check';
     setTimeout(() => { btn.textContent = 'content_copy'; }, 1500);
   }).catch(() => prompt('URLをコピーしてください:', url));
-}
-function apsRenderTtsSwitch(on) {
-  const slider = document.getElementById('tts-toggle-slider');
-  slider.style.background = on ? 'var(--gold)' : 'var(--navy-700)';
-}
-function apsToggleTtsSwitch() {
-  const cb = document.getElementById('settings-tts-enabled');
-  cb.checked = !cb.checked;
-  apsRenderTtsSwitch(cb.checked);
 }
 function apsSaveSettingsFromModal() {
   const urlInput = document.getElementById('settings-gas-url-input').value.trim();
