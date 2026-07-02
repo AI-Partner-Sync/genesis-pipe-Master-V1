@@ -28,7 +28,16 @@ body {
   flex-direction: column;
   height: 100vh;
   height: 100dvh;
+  position: relative;
 }
+#synapse {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.6;
+}
+header, #chat-area, footer { position: relative; z-index: 1; }
 
 header {
   padding: 14px 20px;
@@ -124,15 +133,58 @@ header {
 
 footer {
   flex-shrink: 0;
-  padding: 12px 14px;
-  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  padding: 10px 14px;
+  padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid rgba(51,65,85,0.4);
   background: rgba(10,15,30,0.9);
   backdrop-filter: blur(12px);
   display: flex;
-  gap: 10px;
-  align-items: flex-end;
+  flex-direction: column;
+  gap: 8px;
 }
+.input-row { display: flex; gap: 10px; align-items: flex-end; }
+.save-row { display: flex; align-items: center; gap: 8px; }
+
+.bgm-control {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 10px;
+  border-radius: 9999px;
+  background: var(--navy-800);
+  border: 1px solid var(--navy-700);
+  flex-shrink: 0;
+}
+.bgm-control.disabled { opacity: 0.35; pointer-events: none; }
+#bgm-toggle {
+  background: none; border: none; cursor: pointer;
+  color: #e2e8f0; display: flex; align-items: center; padding: 0;
+}
+#bgm-toggle .material-icons { font-size: 16px; }
+#bgm-slider-toggle {
+  background: none; border: none; cursor: pointer;
+  color: #64748b; font-size: 10px; line-height: 1; padding: 0;
+}
+#bgm-slider { display: none; width: 64px; accent-color: var(--gold); }
+#bgm-slider.open { display: block; }
+
+#save-log-btn {
+  flex: 1;
+  padding: 10px;
+  border-radius: 11px;
+  border: 1px solid var(--navy-700);
+  background: var(--navy-800);
+  color: #e2e8f0;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+#save-log-btn:hover { border-color: var(--gold); box-shadow: 0 0 14px rgba(245,158,11,0.2); }
+#save-log-btn .material-icons { font-size: 16px; color: var(--gold); }
 #text-input {
   flex: 1;
   padding: 12px 16px;
@@ -337,6 +389,8 @@ footer {
 </head>
 <body>
 
+<canvas id="synapse"></canvas>
+
 <header>
   <div class="header-left">
     <a href="index.html" class="back-btn"><span class="material-icons">arrow_back</span></a>
@@ -355,14 +409,31 @@ footer {
   <div class="bubble system">Titanが記憶を辿っています。話しかけてみてください。</div>
 </div>
 
+<audio id="bgm-audio" src="AI_PARTNER_SYNC_BGM.m4a" loop preload="metadata"></audio>
+
 <footer>
-  <button id="mic-btn" class="icon-btn" onclick="toggleRecording()">
-    <span class="material-icons">mic</span>
-  </button>
-  <textarea id="text-input" rows="1" placeholder="Titanに話しかける…（Cmd+Enterで送信）"></textarea>
-  <button id="send-btn" class="icon-btn" onclick="handleSend()">
-    <span class="material-icons">send</span>
-  </button>
+  <div class="save-row">
+    <div class="bgm-control" id="bgm-control">
+      <button id="bgm-toggle" onclick="toggleBgm()" title="BGM ON/OFF">
+        <span class="material-icons" id="bgm-icon">volume_off</span>
+      </button>
+      <button id="bgm-slider-toggle" onclick="toggleBgmSlider()">▲</button>
+      <input type="range" id="bgm-slider" min="0" max="100" value="8" oninput="setBgmVolume(this.value)">
+    </div>
+    <button id="save-log-btn" onclick="saveConversationLog()">
+      <span class="material-icons">save</span>
+      会話ログを保存して終了
+    </button>
+  </div>
+  <div class="input-row">
+    <button id="mic-btn" class="icon-btn" onclick="toggleRecording()">
+      <span class="material-icons">mic</span>
+    </button>
+    <textarea id="text-input" rows="1" placeholder="Titanに話しかける…（Cmd+Enterで送信）"></textarea>
+    <button id="send-btn" class="icon-btn" onclick="handleSend()">
+      <span class="material-icons">send</span>
+    </button>
+  </div>
 </footer>
 
 <!-- 設定モーダル -->
@@ -426,6 +497,157 @@ footer {
 </div>
 
 <script>
+/* ══════════════════════════════════════════
+   SYNAPSE BACKGROUND — 有機的な光の連鎖
+   到達時に光が消えず、そのまま次のノードへ飛び続ける演出。
+   （Genesis Pipe V3のシナプスリンクを継承し、消滅感を抑えるよう調整）
+══════════════════════════════════════════ */
+(function initSynapse() {
+  const canvas = document.getElementById('synapse');
+  const ctx    = canvas.getContext('2d');
+  const NODE_COUNT = 60, MAX_DIST = 190, ATTRACT_DIST = 90, REPEL_DIST = 55;
+  const ATTRACT_FORCE = 0.0006, REPEL_FORCE = 0.035, MAX_SPEED = 0.7;
+  const CURRENT_SPD_MIN = 0.0020, CURRENT_SPD_MAX = 0.0045;
+  const TAIL_MIN = 0.12, TAIL_MAX = 0.28, MAX_CURRENTS = 28, SPAWN_CHANCE = 0.02;
+  // 連鎖を長く・減衰を緩やかにして「消えずに飛び続ける」印象を強める
+  const MAX_CHAIN_DEPTH = 22, CHAIN_DIM = 0.97;
+  let nodes = [], currents = [];
+
+  function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+
+  function initNodes() {
+    const w = canvas.width, h = canvas.height;
+    const cols = Math.ceil(Math.sqrt(NODE_COUNT * (w / h))), rows = Math.ceil(NODE_COUNT / cols);
+    const cellW = w / cols, cellH = h / rows, margin = 0.15, pos = [];
+    for (let r = 0; r < rows && pos.length < NODE_COUNT; r++)
+      for (let c = 0; c < cols && pos.length < NODE_COUNT; c++)
+        pos.push({ x: cellW * (c + margin + Math.random() * (1 - margin * 2)), y: cellH * (r + margin + Math.random() * (1 - margin * 2)) });
+    for (let i = pos.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pos[i], pos[j]] = [pos[j], pos[i]]; }
+    nodes = pos.slice(0, NODE_COUNT).map(({ x, y }) => {
+      const a = Math.random() * Math.PI * 2, s = 0.1 + Math.random() * 0.2;
+      return { x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, radius: 0.6 + Math.random() * 0.8, pulse: Math.random() * Math.PI * 2, pulseSpeed: 0.014 + Math.random() * 0.014, flash: 0, flashDecay: 0.012 + Math.random() * 0.008, lastSentTo: -1 };
+    });
+    currents = [];
+  }
+
+  function getEdges() {
+    const edges = [];
+    for (let i = 0; i < nodes.length; i++)
+      for (let j = i + 1; j < nodes.length; j++) {
+        const dx = nodes[i].x - nodes[j].x, dy = nodes[i].y - nodes[j].y;
+        if (Math.sqrt(dx * dx + dy * dy) < MAX_DIST) edges.push([i, j]);
+      }
+    return edges;
+  }
+
+  function spawnCurrent(edges) {
+    if (!edges.length) return;
+    const [a, b] = edges[Math.floor(Math.random() * edges.length)];
+    const [from, to] = Math.random() < 0.5 ? [a, b] : [b, a];
+    currents.push({ fromIdx: from, toIdx: to, progress: 0, speed: CURRENT_SPD_MIN + Math.random() * (CURRENT_SPD_MAX - CURRENT_SPD_MIN), brightness: 0.8 + Math.random() * 0.2, tailLength: TAIL_MIN + Math.random() * (TAIL_MAX - TAIL_MIN), chainDepth: 0, prevIdx: from });
+  }
+
+  // 到達直後、同じ明るさのまま次のノードへ飛び立たせる（消滅させない）
+  function continueChain(arrivedAt, cameFrom, speed, brightness, tailLength, chainDepth) {
+    nodes[arrivedAt].flash = Math.min(1.0, brightness);
+    if (chainDepth >= MAX_CHAIN_DEPTH) return;
+    const candidates = [];
+    for (let j = 0; j < nodes.length; j++) {
+      if (j === arrivedAt || j === cameFrom) continue;
+      const dx = nodes[arrivedAt].x - nodes[j].x, dy = nodes[arrivedAt].y - nodes[j].y;
+      if (Math.sqrt(dx * dx + dy * dy) < MAX_DIST) candidates.push(j);
+    }
+    const nextTo = candidates.length ? candidates[Math.floor(Math.random() * candidates.length)] : cameFrom;
+    nodes[arrivedAt].lastSentTo = nextTo;
+    currents.push({ fromIdx: arrivedAt, toIdx: nextTo, progress: 0, speed, brightness: brightness * CHAIN_DIM, tailLength, chainDepth: chainDepth + 1, prevIdx: arrivedAt });
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    for (let i = 0; i < nodes.length; i++)
+      for (let j = i + 1; j < nodes.length; j++) {
+        const a = nodes[i], b = nodes[j], dx = b.x - a.x, dy = b.y - a.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 0.001, nx = dx / dist, ny = dy / dist;
+        if (dist < REPEL_DIST) { const f = REPEL_FORCE * (1 - dist / REPEL_DIST); a.vx -= nx * f; a.vy -= ny * f; b.vx += nx * f; b.vy += ny * f; }
+        else if (dist < ATTRACT_DIST) { const f = ATTRACT_FORCE * (1 - dist / ATTRACT_DIST); a.vx += nx * f; a.vy += ny * f; b.vx -= nx * f; b.vy -= ny * f; }
+      }
+    for (const n of nodes) {
+      const spd = Math.sqrt(n.vx * n.vx + n.vy * n.vy);
+      if (spd > MAX_SPEED) { n.vx = (n.vx / spd) * MAX_SPEED; n.vy = (n.vy / spd) * MAX_SPEED; }
+      if (spd < 0.03) { n.vx += (Math.random() - 0.5) * 0.03; n.vy += (Math.random() - 0.5) * 0.03; }
+      n.x += n.vx; n.y += n.vy;
+      n.pulse += n.pulseSpeed;
+      n.flash = Math.max(0, n.flash - n.flashDecay);
+      if (n.x < 0 || n.x > canvas.width) n.vx *= -1;
+      if (n.y < 0 || n.y > canvas.height) n.vy *= -1;
+    }
+    const edges = getEdges();
+    if (currents.length < MAX_CURRENTS && Math.random() < SPAWN_CHANCE) spawnCurrent(edges);
+    for (const [i, j] of edges) {
+      const a = nodes[i], b = nodes[j], dx = a.x - b.x, dy = a.y - b.y;
+      const dist = Math.sqrt(dx * dx + dy * dy), t = 1 - dist / MAX_DIST;
+      const isBridge = (a.flash > 0.05 && a.lastSentTo === j) || (b.flash > 0.05 && b.lastSentTo === i);
+      if (isBridge) {
+        const bGrad = ctx.createLinearGradient(a.x, a.y, b.x, b.y);
+        bGrad.addColorStop(0, `rgba(245,158,11,${a.flash * 0.55})`);
+        bGrad.addColorStop(1, `rgba(245,158,11,${b.flash * 0.55})`);
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+        ctx.strokeStyle = bGrad; ctx.lineWidth = 1.0 + Math.max(a.flash, b.flash) * 0.5; ctx.stroke();
+      } else {
+        const alpha = Math.pow(t, 2.2) * 0.12 + Math.max(a.flash, b.flash) * 0.1;
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+        ctx.strokeStyle = `rgba(210,225,255,${Math.min(alpha, 0.4)})`; ctx.lineWidth = 0.5; ctx.stroke();
+      }
+    }
+    currents = currents.filter((cur) => {
+      cur.progress += cur.speed;
+      if (cur.progress >= 1.0) { continueChain(cur.toIdx, cur.fromIdx, cur.speed, cur.brightness, cur.tailLength, cur.chainDepth); return false; }
+      const from = nodes[cur.fromIdx], to = nodes[cur.toIdx];
+      const hx = from.x + (to.x - from.x) * cur.progress, hy = from.y + (to.y - from.y) * cur.progress;
+      const ts = Math.max(0, cur.progress - cur.tailLength);
+      const tx = from.x + (to.x - from.x) * ts, ty2 = from.y + (to.y - from.y) * ts;
+      const lineGrad = ctx.createLinearGradient(tx, ty2, hx, hy);
+      lineGrad.addColorStop(0, `rgba(245,158,11,0)`);
+      lineGrad.addColorStop(0.5, `rgba(245,158,11,${cur.brightness * 0.35})`);
+      lineGrad.addColorStop(1, `rgba(255,245,180,${cur.brightness})`);
+      ctx.beginPath(); ctx.moveTo(tx, ty2); ctx.lineTo(hx, hy);
+      ctx.strokeStyle = lineGrad; ctx.lineWidth = 1.6; ctx.stroke();
+      const gR = 5 + cur.brightness * 2;
+      const gGrad = ctx.createRadialGradient(hx, hy, 0, hx, hy, gR);
+      gGrad.addColorStop(0, `rgba(255,255,220,${cur.brightness})`);
+      gGrad.addColorStop(0.3, `rgba(255,210,80,${cur.brightness * 0.9})`);
+      gGrad.addColorStop(1, `rgba(245,158,11,0)`);
+      ctx.beginPath(); ctx.arc(hx, hy, gR, 0, Math.PI * 2); ctx.fillStyle = gGrad; ctx.fill();
+      return true;
+    });
+    for (const n of nodes) {
+      const glow = (Math.sin(n.pulse) + 1) / 2, flash = n.flash, r = n.radius + glow * 0.6 + flash * 3;
+      if (flash > 0.01) {
+        // 到達時の光は「爆発」ではなく、次へ向かう光と地続きに見えるよう抑えめの柔らかい輝きに
+        const bR = r * 4.5;
+        const burst = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, bR);
+        burst.addColorStop(0, `rgba(255,235,180,${flash * 0.85})`);
+        burst.addColorStop(0.4, `rgba(245,158,11,${flash * 0.45})`);
+        burst.addColorStop(1, `rgba(245,158,11,0)`);
+        ctx.beginPath(); ctx.arc(n.x, n.y, bR, 0, Math.PI * 2); ctx.fillStyle = burst; ctx.fill();
+        ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255,240,200,${0.8 + flash * 0.2})`; ctx.fill();
+      } else {
+        const oG = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, r * 3);
+        oG.addColorStop(0, `rgba(220,230,255,${0.1 + glow * 0.07})`);
+        oG.addColorStop(1, `rgba(220,230,255,0)`);
+        ctx.beginPath(); ctx.arc(n.x, n.y, r * 3, 0, Math.PI * 2); ctx.fillStyle = oG; ctx.fill();
+        ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2); ctx.fillStyle = `rgba(220,230,255,${0.4 + glow * 0.18})`; ctx.fill();
+      }
+    }
+    requestAnimationFrame(draw);
+  }
+
+  function onResize() { resize(); initNodes(); }
+  resize(); initNodes(); draw();
+  window.addEventListener('resize', onResize);
+})();
+
 let conversationHistory = '';
 let currentAudio = null;
 const chatArea  = document.getElementById('chat-area');
@@ -458,6 +680,69 @@ function addTyping() {
   chatArea.appendChild(div);
   chatArea.scrollTop = chatArea.scrollHeight;
   return div;
+}
+
+/* ══════════════════════════════════════════
+   BGM
+══════════════════════════════════════════ */
+const bgmAudio = document.getElementById('bgm-audio');
+bgmAudio.volume = 0.08;
+let bgmPlaying = false;
+bgmAudio.addEventListener('error', () => {
+  const ctrl = document.getElementById('bgm-control');
+  ctrl.classList.add('disabled');
+  ctrl.title = 'BGMファイルが見つかりません';
+});
+function toggleBgm() {
+  if (!bgmPlaying) {
+    bgmAudio.play().catch(() => {});
+    bgmPlaying = true;
+    document.getElementById('bgm-icon').textContent = 'volume_up';
+  } else {
+    bgmAudio.pause();
+    bgmPlaying = false;
+    document.getElementById('bgm-icon').textContent = 'volume_off';
+  }
+}
+function setBgmVolume(val) { bgmAudio.volume = val / 100; }
+function toggleBgmSlider() {
+  const slider = document.getElementById('bgm-slider');
+  const btn = document.getElementById('bgm-slider-toggle');
+  const isOpen = slider.classList.toggle('open');
+  btn.textContent = isOpen ? '▼' : '▲';
+}
+
+/* ══════════════════════════════════════════
+   会話ログを保存して終了
+══════════════════════════════════════════ */
+function saveConversationLog() {
+  if (!conversationHistory) {
+    addBubble('保存する会話がまだありません。', 'system');
+    return;
+  }
+  const s = apsLoadSettings();
+  const snapshot = conversationHistory;
+  const btn = document.getElementById('save-log-btn');
+  btn.disabled = true;
+  addBubble('アーカイブへ送信中…', 'system');
+  fetch(s.gasUrl, {
+    method: 'POST',
+    redirect: 'follow',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ type: 'save', fullText: snapshot })
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (data && data.status === 'success') {
+        addBubble('スプレッドシートに記録完了。', 'system');
+        if (data.oracle) addBubble(data.oracle, 'titan');
+        conversationHistory = '';
+      } else {
+        addBubble('記録に失敗した: ' + (data && data.message ? data.message : '不明なエラー'), 'system');
+      }
+    })
+    .catch(err => addBubble('通信エラー: ' + err.message, 'system'))
+    .finally(() => { btn.disabled = false; });
 }
 
 function handleSend() {
