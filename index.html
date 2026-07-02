@@ -78,8 +78,8 @@ header {
 }
 .header-left { display: flex; align-items: center; gap: 14px; }
 .logo {
-  width: 44px; height: 44px;
-  border-radius: 10px;
+  height: 34px;
+  width: auto;
   object-fit: contain;
   flex-shrink: 0;
 }
@@ -279,8 +279,8 @@ header {
 }
 
 .hero-logo {
-  width: 88px; height: 88px;
-  border-radius: 20px;
+  width: clamp(180px, 20vw, 230px);
+  height: auto;
   object-fit: contain;
   margin-bottom: 28px;
   filter: drop-shadow(0 0 24px rgba(245,158,11,0.3));
