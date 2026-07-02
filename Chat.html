@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>AI Partner Sync — Titan Chat</title>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<style>
+:root {
+  --navy-950: #0a0f1e;
+  --navy-900: #0f172a;
+  --navy-800: #1e293b;
+  --navy-700: #334155;
+  --gold: #f59e0b;
+  --gold-dim: rgba(245,158,11,0.15);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  background: var(--navy-950);
+  color: #e2e8f0;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  height: 100%;
+  overflow: hidden;
+}
+body {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+}
+
+header {
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid rgba(51,65,85,0.5);
+  background: rgba(10,15,30,0.9);
+  backdrop-filter: blur(12px);
+  flex-shrink: 0;
+}
+.back-btn {
+  color: #64748b;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  padding: 4px;
+  border-radius: 8px;
+  transition: color 0.15s;
+}
+.back-btn:hover { color: var(--gold); }
+.logo { width: 34px; height: 34px; border-radius: 8px; object-fit: contain; flex-shrink: 0; }
+.header-title { font-size: 15px; font-weight: 700; color: var(--gold); letter-spacing: 0.03em; }
+.header-sub { font-size: 10px; color: #475569; margin-top: 1px; letter-spacing: 0.06em; }
+
+#chat-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+#chat-area::-webkit-scrollbar { width: 4px; }
+#chat-area::-webkit-scrollbar-thumb { background: var(--navy-700); border-radius: 2px; }
+
+.bubble {
+  max-width: 82%;
+  padding: 12px 16px;
+  border-radius: 16px;
+  font-size: 14px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  animation: fadeUp 0.25s ease;
+}
+@keyframes fadeUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+.bubble.user {
+  align-self: flex-end;
+  background: rgba(245,158,11,0.14);
+  border: 1px solid rgba(245,158,11,0.25);
+  border-bottom-right-radius: 4px;
+  color: #f1f5f9;
+}
+.bubble.titan {
+  align-self: flex-start;
+  background: var(--navy-800);
+  border-left: 3px solid var(--gold);
+  border-bottom-left-radius: 4px;
+  color: #e2e8f0;
+}
+.bubble.system {
+  align-self: center;
+  background: rgba(148,163,184,0.08);
+  color: #64748b;
+  font-size: 11px;
+  padding: 6px 14px;
+  border-radius: 20px;
+}
+
+.typing { display: flex; gap: 4px; padding: 4px 2px; }
+.typing .dot {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--gold);
+  animation: bounce 1.3s infinite ease-in-out both;
+}
+.typing .dot:nth-child(2) { animation-delay: -0.18s; }
+.typing .dot:nth-child(3) { animation-delay: -0.36s; }
+@keyframes bounce { 0%,80%,100% { transform: scale(0.4); opacity: 0.4; } 40% { transform: scale(1); opacity: 1; } }
+
+footer {
+  flex-shrink: 0;
+  padding: 12px 14px;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid rgba(51,65,85,0.4);
+  background: rgba(10,15,30,0.9);
+  backdrop-filter: blur(12px);
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+#text-input {
+  flex: 1;
+  padding: 12px 16px;
+  border-radius: 18px;
+  background: var(--navy-800);
+  border: 1px solid var(--navy-700);
+  color: #e2e8f0;
+  font-size: 15px;
+  line-height: 1.5;
+  min-height: 46px;
+  max-height: 40vh;
+  resize: none;
+  outline: none;
+  font-family: inherit;
+  transition: border-color 0.15s;
+}
+#text-input:focus { border-color: var(--gold); }
+#text-input::placeholder { color: #475569; }
+
+.icon-btn {
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: transform 0.15s, opacity 0.15s;
+}
+#send-btn {
+  background: linear-gradient(135deg, var(--gold) 0%, #fcd34d 100%);
+  color: var(--navy-950);
+}
+#send-btn:active { transform: scale(0.92); }
+#mic-btn {
+  background: var(--navy-800);
+  border: 1px solid var(--navy-700);
+  color: var(--gold);
+}
+#mic-btn.recording {
+  background: rgba(239,68,68,0.85);
+  color: #fff;
+  border-color: transparent;
+  animation: pulse-red 1.4s infinite;
+}
+#mic-btn.disabled-mic { opacity: 0.3; cursor: not-allowed; }
+@keyframes pulse-red {
+  0% { box-shadow: 0 0 0 0 rgba(239,68,68,0.5); }
+  70% { box-shadow: 0 0 0 12px rgba(239,68,68,0); }
+  100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <a href="index.html" class="back-btn"><span class="material-icons">arrow_back</span></a>
+  <img src="Genesis_pipe_Logo.png" class="logo" alt="logo" onerror="this.style.display='none'">
+  <div>
+    <div class="header-title">Titan</div>
+    <div class="header-sub">守護軍師との対話</div>
+  </div>
+</header>
+
+<div id="chat-area">
+  <div class="bubble system">Titanが記憶を辿っています。話しかけてみてください。</div>
+</div>
+
+<footer>
+  <button id="mic-btn" class="icon-btn" onclick="toggleRecording()">
+    <span class="material-icons">mic</span>
+  </button>
+  <textarea id="text-input" rows="1" placeholder="Titanに話しかける…"></textarea>
+  <button id="send-btn" class="icon-btn" onclick="handleSend()">
+    <span class="material-icons">send</span>
+  </button>
+</footer>
+
+<script>
+const GAS_API_URL = 'https://script.google.com/macros/s/AKfycby45pWuHOr7mmtoFTX0Vj5DTkmXYPXHixUxZckXhwqsk5cD7wfYwA6D9ShNxOutdhNu/exec';
+const USER_NAME = 'Rikki';
+const AI_NAME   = 'Titan';
+
+let conversationHistory = '';
+const chatArea  = document.getElementById('chat-area');
+const textInput = document.getElementById('text-input');
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, window.innerHeight * 0.4) + 'px';
+}
+textInput.addEventListener('input', () => autoResize(textInput));
+textInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+});
+
+function addBubble(text, cls) {
+  const div = document.createElement('div');
+  div.className = 'bubble ' + cls;
+  div.textContent = text;
+  chatArea.appendChild(div);
+  chatArea.scrollTop = chatArea.scrollHeight;
+  return div;
+}
+
+function addTyping() {
+  const div = document.createElement('div');
+  div.className = 'bubble titan';
+  div.innerHTML = '<div class="typing"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>';
+  chatArea.appendChild(div);
+  chatArea.scrollTop = chatArea.scrollHeight;
+  return div;
+}
+
+function handleSend() {
+  const text = textInput.value.trim();
+  if (!text) return;
+  if (isRecording && recognition) recognition.stop();
+  addBubble(text, 'user');
+  textInput.value = '';
+  autoResize(textInput);
+  conversationHistory += `[${USER_NAME}]: ${text}\n`;
+
+  const typingEl = addTyping();
+  fetch(GAS_API_URL, {
+    method: 'POST',
+    redirect: 'follow',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ type: 'ai_chat', fullText: text, history: conversationHistory })
+  })
+    .then(r => r.json())
+    .then(data => {
+      typingEl.remove();
+      const reply = (data && data.reply) ? data.reply : '（返答を受信できませんでした）';
+      addBubble(reply, 'titan');
+      conversationHistory += `[${AI_NAME}]: ${reply}\n`;
+    })
+    .catch(err => {
+      typingEl.remove();
+      addBubble('通信エラーが発生した。パイプの接続を確認してくれ。', 'system');
+      console.error('Titan Comms Error:', err);
+    });
+}
+
+// ── 音声入力 ──
+const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null;
+let isRecording = false;
+let silenceTimer = null;
+const SILENCE_DELAY = 800;
+
+if (SpeechRecognitionAPI) {
+  recognition = new SpeechRecognitionAPI();
+  recognition.lang = 'ja-JP';
+  recognition.continuous = true;
+  recognition.interimResults = false;
+  recognition.onstart = () => {
+    isRecording = true;
+    document.getElementById('mic-btn').classList.add('recording');
+    textInput.placeholder = '音声認識中…';
+  };
+  recognition.onend = () => {
+    isRecording = false;
+    document.getElementById('mic-btn').classList.remove('recording');
+    textInput.placeholder = 'Titanに話しかける…';
+    clearTimeout(silenceTimer);
+  };
+  recognition.onresult = (e) => {
+    let transcript = '';
+    for (let i = e.resultIndex; i < e.results.length; ++i)
+      if (e.results[i].isFinal) transcript += e.results[i][0].transcript;
+    if (!transcript) return;
+    clearTimeout(silenceTimer);
+    const keyword = transcript.trim().replace(/[。、！!？?\s…　]+$/, '');
+    if (keyword === '送信') { handleSend(); return; }
+    textInput.value += transcript;
+    autoResize(textInput);
+    silenceTimer = setTimeout(() => {
+      if (isRecording && textInput.value && !textInput.value.endsWith('\n')) {
+        textInput.value += '\n';
+        autoResize(textInput);
+      }
+    }, SILENCE_DELAY);
+  };
+  recognition.onerror = (e) => addBubble('マイクエラー: ' + e.error, 'system');
+} else {
+  document.getElementById('mic-btn').classList.add('disabled-mic');
+  document.getElementById('mic-btn').title = 'このブラウザは音声入力に対応していません';
+}
+
+function toggleRecording() {
+  if (!recognition) { addBubble('このブラウザは音声入力に対応していません', 'system'); return; }
+  isRecording ? recognition.stop() : recognition.start();
+}
+</script>
+</body>
+</html>
