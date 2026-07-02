@@ -584,11 +584,16 @@ function apsSaveSettingsFromModal() {
     ttsPitch: parseFloat(document.getElementById('settings-tts-pitch').value),
   };
   if (urlEditOpen && urlInput) patch.gasUrl = urlInput;
-  apsSaveSettings(patch);
+  const merged = apsSaveSettings(patch);
   document.getElementById('header-ai-name').textContent = aiName;
   const btn = document.getElementById('settings-save-btn');
-  btn.textContent = '保存完了！';
-  setTimeout(() => { btn.textContent = '保存する'; apsCloseSettings(); }, 600);
+  btn.disabled = true;
+  btn.textContent = '保存中…';
+  apsPushPartnerNamesToGas(merged.gasUrl, userName, aiName).finally(() => {
+    btn.disabled = false;
+    btn.textContent = '保存完了！';
+    setTimeout(() => { btn.textContent = '保存する'; apsCloseSettings(); }, 600);
+  });
 }
 
 // ── 音声入力 ──

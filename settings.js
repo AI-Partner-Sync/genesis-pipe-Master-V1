@@ -24,3 +24,14 @@ function apsSaveSettings(partial) {
   localStorage.setItem(APS_STORAGE_KEY, JSON.stringify(merged));
   return merged;
 }
+
+// GAS側のスクリプトプロパティ（PARTNER_USER_NAME/PARTNER_AI_NAME）へも反映する。
+// スプレッドシート側を正データ源とするため、フロントから変更したら都度push。
+function apsPushPartnerNamesToGas(gasUrl, userName, aiName) {
+  return fetch(gasUrl, {
+    method: 'POST',
+    redirect: 'follow',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ type: 'save_partner_names', userName, aiName })
+  }).then(r => r.json()).catch(() => null);
+}

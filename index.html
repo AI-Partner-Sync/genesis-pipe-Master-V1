@@ -679,10 +679,15 @@ function apsSaveSettingsFromModal() {
     ttsPitch: parseFloat(document.getElementById('settings-tts-pitch').value),
   };
   if (urlEditOpen && urlInput) patch.gasUrl = urlInput;
-  apsSaveSettings(patch);
+  const merged = apsSaveSettings(patch);
   const btn = document.getElementById('settings-save-btn');
-  btn.textContent = '保存完了！';
-  setTimeout(() => { btn.textContent = '保存する'; apsCloseSettings(); loadStats(); }, 600);
+  btn.disabled = true;
+  btn.textContent = '保存中…';
+  apsPushPartnerNamesToGas(merged.gasUrl, userName, aiName).finally(() => {
+    btn.disabled = false;
+    btn.textContent = '保存完了！';
+    setTimeout(() => { btn.textContent = '保存する'; apsCloseSettings(); loadStats(); }, 600);
+  });
 }
 </script>
 </body>
