@@ -2,17 +2,12 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>AI Partner Sync — Master</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>AI Partner Sync — Review Viewer</title>
 <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="settings.js"></script>
 <style>
-@property --ta {
-  syntax: '<angle>';
-  inherits: false;
-  initial-value: 0deg;
-}
-
 :root {
   --navy-950: #0a0f1e;
   --navy-900: #0f172a;
@@ -21,90 +16,42 @@
   --gold: #f59e0b;
   --gold-dim: rgba(245,158,11,0.15);
 }
-
 * { box-sizing: border-box; margin: 0; padding: 0; }
-
-body {
+html, body {
   background: var(--navy-950);
   color: #e2e8f0;
   font-family: 'Segoe UI', system-ui, sans-serif;
-  min-height: 100vh;
-  overflow-x: hidden;
-  position: relative;
+  height: 100%;
 }
+body { min-height: 100vh; min-height: 100dvh; }
 
-/* Aurora overlay */
-.aurora {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  background:
-    radial-gradient(ellipse 60% 40% at 20% 20%, rgba(245,158,11,0.06) 0%, transparent 60%),
-    radial-gradient(ellipse 50% 60% at 80% 70%, rgba(168,85,247,0.05) 0%, transparent 60%),
-    radial-gradient(ellipse 70% 40% at 50% 90%, rgba(56,189,248,0.04) 0%, transparent 60%);
-}
-
-/* Synapse canvas */
-#synapse {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  opacity: 0.25;
-}
-
-/* Main layout */
-.main {
-  position: relative;
-  z-index: 1;
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-}
-
-/* Header */
 header {
-  padding: 20px 32px;
+  padding: 14px 20px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   border-bottom: 1px solid rgba(51,65,85,0.5);
-  background: rgba(10,15,30,0.8);
+  background: rgba(10,15,30,0.9);
   backdrop-filter: blur(12px);
   position: sticky;
   top: 0;
   z-index: 100;
 }
-.header-left { display: flex; align-items: center; gap: 14px; }
-.logo {
-  height: 34px;
-  width: auto;
-  object-fit: contain;
-  flex-shrink: 0;
+.header-left { display: flex; align-items: center; gap: 12px; }
+.back-btn {
+  color: #64748b;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  padding: 4px;
+  border-radius: 8px;
+  transition: color 0.15s;
 }
-.brand-name {
-  font-size: 18px;
-  font-weight: 800;
-  color: var(--gold);
-  letter-spacing: 0.05em;
-}
-.brand-sub {
-  font-size: 11px;
-  color: #475569;
-  margin-top: 2px;
-  letter-spacing: 0.08em;
-}
-.version-badge {
-  font-size: 10px;
-  padding: 3px 8px;
-  border-radius: 6px;
-  border: 1px solid rgba(245,158,11,0.3);
-  color: var(--gold);
-  font-weight: 700;
-  letter-spacing: 0.08em;
-}
-.header-right { display: flex; align-items: center; gap: 10px; }
+.back-btn:hover { color: var(--gold); }
+.logo { height: 30px; width: auto; object-fit: contain; flex-shrink: 0; }
+.header-title { font-size: 15px; font-weight: 700; color: var(--gold); letter-spacing: 0.03em; }
+.header-sub { font-size: 10px; color: #475569; margin-top: 1px; letter-spacing: 0.06em; }
 .settings-btn {
   background: none;
   border: none;
@@ -118,7 +65,101 @@ header {
 }
 .settings-btn:hover { color: var(--gold); background: var(--gold-dim); }
 
-/* ── Settings Modal ── */
+.tab-bar {
+  display: flex;
+  gap: 8px;
+  padding: 12px 20px;
+  border-bottom: 1px solid rgba(51,65,85,0.4);
+  background: rgba(10,15,30,0.6);
+  position: sticky;
+  top: 61px;
+  z-index: 90;
+}
+.tab-btn {
+  padding: 7px 18px;
+  border-radius: 20px;
+  border: 1px solid var(--navy-700);
+  background: transparent;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.tab-btn:hover { border-color: var(--gold); color: var(--gold); }
+.tab-btn.active { background: var(--gold); border-color: var(--gold); color: var(--navy-950); }
+
+#content {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 28px 20px 80px;
+}
+
+.loading, .empty {
+  text-align: center;
+  padding: 80px 20px;
+  color: #475569;
+  font-size: 14px;
+  line-height: 2;
+}
+.spinner {
+  width: 32px; height: 32px;
+  border: 3px solid var(--navy-700);
+  border-top-color: var(--gold);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto 16px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+.meta-chip {
+  font-size: 11px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  background: var(--navy-800);
+  border: 1px solid var(--navy-700);
+  color: #94a3b8;
+}
+.meta-chip.gold { color: var(--gold); border-color: rgba(245,158,11,0.3); background: var(--gold-dim); }
+
+#markdown-body {
+  font-size: 14px;
+  line-height: 1.8;
+  color: #e2e8f0;
+}
+#markdown-body h1, #markdown-body h2, #markdown-body h3 {
+  color: var(--gold);
+  margin: 24px 0 12px;
+  line-height: 1.4;
+}
+#markdown-body h1 { font-size: 20px; }
+#markdown-body h2 { font-size: 17px; }
+#markdown-body h3 { font-size: 15px; }
+#markdown-body p { margin-bottom: 12px; }
+#markdown-body ul, #markdown-body ol { margin: 0 0 12px 20px; }
+#markdown-body li { margin-bottom: 4px; }
+#markdown-body strong { color: #fcd34d; }
+#markdown-body hr { border: none; border-top: 1px solid var(--navy-700); margin: 24px 0; }
+#markdown-body code {
+  background: var(--navy-800);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+#markdown-body blockquote {
+  border-left: 3px solid var(--gold);
+  padding-left: 14px;
+  color: #94a3b8;
+  margin: 12px 0;
+}
+
+/* ── Settings Modal（他ページと共通） ── */
 #settings-overlay {
   display: none;
   position: fixed; inset: 0;
@@ -173,7 +214,6 @@ header {
 }
 .settings-input:focus, .settings-select:focus { border-color: var(--gold); }
 .settings-select option { background: var(--navy-800); }
-.settings-hint { font-size: 11px; color: #475569; margin-bottom: 16px; }
 .settings-section-title {
   font-size: 11px;
   font-weight: 700;
@@ -266,181 +306,35 @@ header {
 }
 .tts-switch input:checked + .slider { background: var(--gold); }
 .tts-switch input:checked + .slider::before { transform: translateX(18px); background: var(--navy-950); }
-
-/* Hero section */
-.hero {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 24px;
-  text-align: center;
-}
-
-.hero-logo {
-  width: clamp(180px, 20vw, 230px);
-  height: auto;
-  object-fit: contain;
-  margin-bottom: 28px;
-  filter: drop-shadow(0 0 24px rgba(245,158,11,0.3));
-}
-
-.hero-title {
-  font-size: clamp(28px, 5vw, 42px);
-  font-weight: 800;
-  color: #f1f5f9;
-  line-height: 1.2;
-  margin-bottom: 12px;
-  letter-spacing: -0.02em;
-}
-.hero-title span {
-  background: linear-gradient(135deg, var(--gold) 0%, #fcd34d 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-.hero-desc {
-  font-size: 15px;
-  color: #64748b;
-  max-width: 480px;
-  line-height: 1.7;
-  margin-bottom: 48px;
-}
-
-/* CTAボタン群 */
-.cta-group {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-  width: 100%;
-  max-width: 360px;
-}
-
-/* Timeline Viewer メインボタン（スピニングボーダー） */
-.btn-timeline {
-  position: relative;
-  width: 100%;
-  padding: 16px 32px;
-  border-radius: 14px;
-  border: none;
-  cursor: pointer;
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--navy-950);
-  background: linear-gradient(135deg, var(--gold) 0%, #fcd34d 100%);
-  letter-spacing: 0.03em;
-  transition: transform 0.15s, box-shadow 0.15s;
-  text-decoration: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-}
-.btn-timeline::before {
-  content: '';
-  position: absolute;
-  inset: -2px;
-  border-radius: 16px;
-  background: conic-gradient(from var(--ta), var(--gold), #a855f7, #38bdf8, var(--gold));
-  animation: spin-border 3s linear infinite;
-  z-index: -1;
-}
-@keyframes spin-border { to { --ta: 360deg; } }
-.btn-timeline:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 32px rgba(245,158,11,0.4);
-}
-.btn-icon { font-size: 20px; }
-
-/* サブボタン */
-.btn-sub {
-  width: 100%;
-  padding: 12px 24px;
-  border-radius: 10px;
-  border: 1px solid var(--navy-700);
-  background: rgba(30,41,59,0.6);
-  color: #94a3b8;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  text-decoration: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  transition: all 0.15s;
-  backdrop-filter: blur(8px);
-}
-.btn-sub:hover {
-  border-color: var(--gold);
-  color: var(--gold);
-  background: var(--gold-dim);
-}
-.btn-sub.disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-  pointer-events: none;
-}
-.coming-soon {
-  font-size: 9px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  background: var(--navy-700);
-  color: #64748b;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  margin-left: 4px;
-}
-
-/* Stats cards */
-.stats-row {
-  display: flex;
-  gap: 12px;
-  margin-top: 56px;
-  flex-wrap: wrap;
-  justify-content: center;
-}
-.stat-card {
-  background: rgba(15,23,42,0.7);
-  border: 1px solid var(--navy-700);
-  border-radius: 12px;
-  padding: 16px 24px;
-  text-align: center;
-  backdrop-filter: blur(8px);
-  min-width: 100px;
-}
-.stat-value {
-  font-size: 22px;
-  font-weight: 800;
-  color: var(--gold);
-  margin-bottom: 4px;
-}
-.stat-label {
-  font-size: 10px;
-  color: #475569;
-  letter-spacing: 0.08em;
-  font-weight: 600;
-}
-
-/* Footer */
-footer {
-  padding: 20px 32px;
-  text-align: center;
-  font-size: 11px;
-  color: #334155;
-  border-top: 1px solid rgba(51,65,85,0.3);
-  position: relative;
-  z-index: 1;
-}
 </style>
 </head>
 <body>
 
-<canvas id="synapse"></canvas>
-<div class="aurora"></div>
+<header>
+  <div class="header-left">
+    <a href="index.html" class="back-btn"><span class="material-icons">arrow_back</span></a>
+    <img src="Genesis_pipe_Logo.png" class="logo" alt="logo" onerror="this.style.display='none'">
+    <div>
+      <div class="header-title">Review Viewer</div>
+      <div class="header-sub">記録の閲覧専用</div>
+    </div>
+  </div>
+  <button class="settings-btn" onclick="apsOpenSettings()" title="設定">
+    <span class="material-icons">settings</span>
+  </button>
+</header>
+
+<div class="tab-bar">
+  <button class="tab-btn active" id="tab-WeeklyReview" onclick="switchTab('WeeklyReview')">Weekly Review</button>
+  <button class="tab-btn" id="tab-AAR" onclick="switchTab('AAR')">AAR</button>
+</div>
+
+<div id="content">
+  <div class="loading">
+    <div class="spinner"></div>
+    読み込み中…
+  </div>
+</div>
 
 <!-- 設定モーダル -->
 <div id="settings-overlay" onclick="apsHandleOverlayClick(event)">
@@ -502,141 +396,75 @@ footer {
   </div>
 </div>
 
-<div class="main">
-  <header>
-    <div class="header-left">
-      <img src="Genesis_pipe_Logo.png" class="logo" alt="logo" onerror="this.style.display='none'">
-      <div>
-        <div class="brand-name">AI Partner Sync</div>
-        <div class="brand-sub">MASTER EDITION</div>
-      </div>
-    </div>
-    <div class="header-right">
-      <button class="settings-btn" onclick="apsOpenSettings()" title="設定">
-        <span class="material-icons">settings</span>
-      </button>
-      <span class="version-badge">V4</span>
-    </div>
-  </header>
-
-  <section class="hero">
-    <img src="Genesis_pipe_Logo.png" class="hero-logo" alt="logo" onerror="this.style.display='none'">
-
-    <h1 class="hero-title">
-      Growth Record<br><span>Timeline Viewer</span>
-    </h1>
-    <p class="hero-desc">
-      Daily・Weekly・Monthly・Annual の蒸留記録を<br>
-      感情アークとともに時系列で俯瞰する。
-    </p>
-
-    <div class="cta-group">
-      <a href="Timeline_Viewer.html" class="btn-timeline">
-        <span class="btn-icon">⏱</span>
-        Timeline Viewer を開く
-      </a>
-      <a href="Chat.html" class="btn-sub">
-        AI Chat（Titan）
-      </a>
-      <a href="ReviewViewer.html" class="btn-sub">
-        Weekly Review
-      </a>
-    </div>
-
-    <div class="stats-row" id="stats-row">
-      <div class="stat-card">
-        <div class="stat-value" id="stat-total">—</div>
-        <div class="stat-label">TOTAL ENTRIES</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-value" id="stat-daily">—</div>
-        <div class="stat-label">DAILY RECORDS</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-value" id="stat-weeks">—</div>
-        <div class="stat-label">WEEKS TRACKED</div>
-      </div>
-    </div>
-  </section>
-
-  <footer>
-    AI Partner Sync Master — Powered by Google Apps Script &amp; GitHub Pages
-  </footer>
-</div>
-
 <script>
-// Synapse canvas animation
-const canvas = document.getElementById('synapse');
-const ctx = canvas.getContext('2d');
-let nodes = [], W, H;
+let currentTab = 'WeeklyReview';
 
-function resize() {
-  W = canvas.width  = window.innerWidth;
-  H = canvas.height = window.innerHeight;
+function switchTab(type) {
+  currentTab = type;
+  document.getElementById('tab-WeeklyReview').classList.toggle('active', type === 'WeeklyReview');
+  document.getElementById('tab-AAR').classList.toggle('active', type === 'AAR');
+  loadFile(type);
 }
-resize();
-window.addEventListener('resize', resize);
 
-for (let i = 0; i < 40; i++) {
-  nodes.push({
-    x: Math.random() * window.innerWidth,
-    y: Math.random() * window.innerHeight,
-    vx: (Math.random() - 0.5) * 0.3,
-    vy: (Math.random() - 0.5) * 0.3,
+function splitFrontmatter(raw) {
+  const m = raw.match(/^---\n([\s\S]*?)\n---\n?/);
+  if (!m) return { meta: {}, body: raw };
+  const meta = {};
+  m[1].split('\n').forEach(line => {
+    const idx = line.indexOf(':');
+    if (idx < 0) return;
+    const key = line.slice(0, idx).trim();
+    let val = line.slice(idx + 1).trim();
+    val = val.replace(/^"(.*)"$/, '$1');
+    if (key && val && !key.startsWith('-')) meta[key] = val;
   });
+  return { meta, body: raw.slice(m[0].length) };
 }
 
-function drawSynapse() {
-  ctx.clearRect(0, 0, W, H);
-  nodes.forEach(n => {
-    n.x += n.vx; n.y += n.vy;
-    if (n.x < 0 || n.x > W) n.vx *= -1;
-    if (n.y < 0 || n.y > H) n.vy *= -1;
-  });
-  for (let i = 0; i < nodes.length; i++) {
-    for (let j = i + 1; j < nodes.length; j++) {
-      const dx = nodes[i].x - nodes[j].x;
-      const dy = nodes[i].y - nodes[j].y;
-      const dist = Math.sqrt(dx*dx + dy*dy);
-      if (dist < 160) {
-        ctx.beginPath();
-        ctx.strokeStyle = `rgba(245,158,11,${0.12 * (1 - dist/160)})`;
-        ctx.lineWidth = 0.5;
-        ctx.moveTo(nodes[i].x, nodes[i].y);
-        ctx.lineTo(nodes[j].x, nodes[j].y);
-        ctx.stroke();
-      }
-    }
-    ctx.beginPath();
-    ctx.arc(nodes[i].x, nodes[i].y, 1.5, 0, Math.PI*2);
-    ctx.fillStyle = 'rgba(245,158,11,0.3)';
-    ctx.fill();
-  }
-  requestAnimationFrame(drawSynapse);
+function renderMeta(meta, filename, modified) {
+  const chips = [];
+  if (meta.period) chips.push(`<span class="meta-chip gold">${esc(meta.period)}</span>`);
+  if (meta.review_type) chips.push(`<span class="meta-chip">${esc(meta.review_type)}</span>`);
+  if (meta.date) chips.push(`<span class="meta-chip">${esc(meta.date)}</span>`);
+  if (modified) chips.push(`<span class="meta-chip">更新: ${esc(new Date(modified).toLocaleString('ja-JP'))}</span>`);
+  if (filename) chips.push(`<span class="meta-chip">${esc(filename)}</span>`);
+  return chips.length ? `<div class="meta-row">${chips.join('')}</div>` : '';
 }
-drawSynapse();
 
-// Stats from GAS API
-async function loadStats() {
+function esc(str) {
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+async function loadFile(type) {
+  const content = document.getElementById('content');
+  content.innerHTML = '<div class="loading"><div class="spinner"></div>読み込み中…</div>';
+  const s = apsLoadSettings();
   try {
-    const gasUrl = apsLoadSettings().gasUrl;
-    const sep = gasUrl.includes('?') ? '&' : '?';
-    const res = await fetch(gasUrl + sep + 'page=timeline_data');
-    if (!res.ok) return;
+    const res = await fetch(s.gasUrl, {
+      method: 'POST',
+      redirect: 'follow',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ type: 'vault_file', suffix: type })
+    });
     const data = await res.json();
-    if (!Array.isArray(data)) return;
-    const total  = data.length;
-    const daily  = data.filter(e => e.level === 'Daily').length;
-    const weekly = data.filter(e => e.level === 'Weekly').length;
-    document.getElementById('stat-total').textContent = total;
-    document.getElementById('stat-daily').textContent = daily;
-    document.getElementById('stat-weeks').textContent = weekly;
-  } catch(e) { /* サイレント */ }
+    if (!data || data.status !== 'success') {
+      const label = type === 'WeeklyReview' ? 'Weekly Review' : 'AAR';
+      content.innerHTML = `<div class="empty">まだ${label}ファイルが見つかりません。<br>
+        <small style="color:#334155">${esc(data && data.message || '')}</small></div>`;
+      return;
+    }
+    const { meta, body } = splitFrontmatter(data.content || '');
+    const html = window.marked ? marked.parse(body) : esc(body).replace(/\n/g, '<br>');
+    content.innerHTML = renderMeta(meta, data.name, data.modified) + `<div id="markdown-body">${html}</div>`;
+  } catch (err) {
+    content.innerHTML = `<div class="empty">通信エラーが発生した。<br>
+      <small style="color:#334155">${esc(err.message)}</small></div>`;
+    console.error(err);
+  }
 }
-loadStats();
 
 /* ══════════════════════════════════════════
-   設定モーダル
+   設定モーダル（他ページと共通ロジック）
 ══════════════════════════════════════════ */
 function apsOpenSettings() {
   const s = apsLoadSettings();
@@ -695,9 +523,11 @@ function apsSaveSettingsFromModal() {
   apsPushPartnerNamesToGas(merged.gasUrl, userName, aiName).finally(() => {
     btn.disabled = false;
     btn.textContent = '保存完了！';
-    setTimeout(() => { btn.textContent = '保存する'; apsCloseSettings(); loadStats(); }, 600);
+    setTimeout(() => { btn.textContent = '保存する'; apsCloseSettings(); }, 600);
   });
 }
+
+loadFile(currentTab);
 </script>
 </body>
 </html>
