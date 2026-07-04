@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>AI Partner Sync — Master Timeline Viewer</title>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="settings.js"></script>
 <style>
@@ -39,7 +40,16 @@ header {
   z-index: 100;
 }
 .header-left { display: flex; align-items: center; gap: 12px; }
-.logo { height: 32px; width: auto; object-fit: contain; flex-shrink: 0; }
+.back-btn {
+  color: #64748b;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  padding: 4px;
+  border-radius: 8px;
+  transition: color 0.15s;
+}
+.back-btn:hover { color: var(--gold); }
 header h1 { font-size: 16px; font-weight: 700; color: var(--gold); letter-spacing: 0.05em; }
 .subtitle { font-size: 11px; color: #475569; margin-top: 2px; }
 .header-right { font-size: 11px; color: #475569; }
@@ -253,7 +263,7 @@ header h1 { font-size: 16px; font-weight: 700; color: var(--gold); letter-spacin
 
 <header>
   <div class="header-left">
-    <img src="Genesis_pipe_Logo.png" class="logo" alt="logo" onerror="this.style.display='none'">
+    <a href="index.html" class="back-btn" title="Home pageへ戻る"><span class="material-icons">arrow_back</span></a>
     <div>
       <h1>AI Partner Sync</h1>
       <div class="subtitle">Master Timeline — Growth Record</div>
