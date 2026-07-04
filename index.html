@@ -77,12 +77,6 @@ header {
   z-index: 100;
 }
 .header-left { display: flex; align-items: center; gap: 14px; }
-.logo {
-  height: 34px;
-  width: auto;
-  object-fit: contain;
-  flex-shrink: 0;
-}
 .brand-name {
   font-size: 18px;
   font-weight: 800;
@@ -93,15 +87,6 @@ header {
   font-size: 11px;
   color: #475569;
   margin-top: 2px;
-  letter-spacing: 0.08em;
-}
-.version-badge {
-  font-size: 10px;
-  padding: 3px 8px;
-  border-radius: 6px;
-  border: 1px solid rgba(245,158,11,0.3);
-  color: var(--gold);
-  font-weight: 700;
   letter-spacing: 0.08em;
 }
 .header-right { display: flex; align-items: center; gap: 10px; }
@@ -349,14 +334,23 @@ header {
   z-index: -1;
 }
 @keyframes spin-border { to { --ta: 360deg; } }
-.btn-timeline:hover {
+.btn-timeline:hover,
+.btn-timeline:active {
   transform: translateY(-2px);
-  box-shadow: 0 8px 32px rgba(245,158,11,0.4);
+  box-shadow: 0 8px 32px rgba(245,158,11,0.4),
+              0 0 24px 4px rgba(245,158,11,0.5),
+              0 0 44px 10px rgba(168,85,247,0.35),
+              0 0 64px 16px rgba(56,189,248,0.25);
+}
+.btn-timeline:hover::before,
+.btn-timeline:active::before {
+  animation-duration: 1s;
 }
 .btn-icon { font-size: 20px; }
 
 /* サブボタン */
 .btn-sub {
+  position: relative;
   width: 100%;
   padding: 12px 24px;
   border-radius: 10px;
@@ -374,10 +368,28 @@ header {
   transition: all 0.15s;
   backdrop-filter: blur(8px);
 }
-.btn-sub:hover {
-  border-color: var(--gold);
+.btn-sub::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 12px;
+  background: conic-gradient(from var(--ta), var(--gold), #a855f7, #38bdf8, #10b981, var(--gold));
+  animation: spin-border 3s linear infinite;
+  z-index: -1;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.btn-sub:hover,
+.btn-sub:active {
+  border-color: transparent;
   color: var(--gold);
   background: var(--gold-dim);
+  box-shadow: 0 0 20px 2px rgba(245,158,11,0.35),
+              0 0 36px 8px rgba(168,85,247,0.25);
+}
+.btn-sub:hover::before,
+.btn-sub:active::before {
+  opacity: 1;
 }
 .btn-sub.disabled {
   opacity: 0.4;
@@ -505,7 +517,6 @@ footer {
 <div class="main">
   <header>
     <div class="header-left">
-      <img src="Genesis_pipe_Logo.png" class="logo" alt="logo" onerror="this.style.display='none'">
       <div>
         <div class="brand-name">AI Partner Sync</div>
         <div class="brand-sub">MASTER EDITION</div>
@@ -515,7 +526,6 @@ footer {
       <button class="settings-btn" onclick="apsOpenSettings()" title="設定">
         <span class="material-icons">settings</span>
       </button>
-      <span class="version-badge">V4</span>
     </div>
   </header>
 
