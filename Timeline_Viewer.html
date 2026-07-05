@@ -430,10 +430,10 @@ function buildChart(levelEntries, level = 'Daily') {
   const labels = sorted.map(e => labelFmt(e.date));
   const scores = sorted.map(e => e.score || 0);
   const pointColors = scores.map(s =>
-    s >= 1000 ? '#dbeafe' : s >= 500 ? '#f59e0b' : s >= 350 ? '#34d399' : s >= 200 ? '#fb923c' : '#f87171'
+    s >= 1000 ? '#fef9c3' : s >= 500 ? '#f59e0b' : s >= 350 ? '#34d399' : s >= 200 ? '#fb923c' : '#f87171'
   );
 
-  // score=1000の点だけ控えめな青白グローを重ね描きするプラグイン
+  // score=1000の点だけゴールドのスパークル（後光＋放射スパイク＋輝く核）を重ね描きするプラグイン
   const glowPlugin = {
     id: 'scoreGlow',
     afterDatasetsDraw(chart) {
@@ -442,17 +442,56 @@ function buildChart(levelEntries, level = 'Daily') {
       meta.data.forEach((point, i) => {
         if (scores[i] < 1000) return;
         const { x, y } = point.getProps(['x', 'y'], true);
-        gctx.save();
-        gctx.shadowColor = 'rgba(191,219,254,0.85)';
-        gctx.shadowBlur = 10;
-        gctx.beginPath();
-        gctx.arc(x, y, 2.5, 0, Math.PI * 2);
-        gctx.fillStyle = '#eff6ff';
-        gctx.fill();
-        gctx.restore();
+        drawSparkle(gctx, x, y);
       });
     }
   };
+
+  function drawSparkle(gctx, x, y) {
+    gctx.save();
+
+    // 1. 柔らかいゴールドの後光
+    const haloR = 15;
+    const halo = gctx.createRadialGradient(x, y, 0, x, y, haloR);
+    halo.addColorStop(0,   'rgba(255,241,196,0.55)');
+    halo.addColorStop(0.5, 'rgba(245,158,11,0.25)');
+    halo.addColorStop(1,   'rgba(245,158,11,0)');
+    gctx.fillStyle = halo;
+    gctx.beginPath();
+    gctx.arc(x, y, haloR, 0, Math.PI * 2);
+    gctx.fill();
+
+    // 2. 放射状の光の筋（4方向）
+    gctx.globalCompositeOperation = 'lighter';
+    const spikeLen = 11;
+    [0, 45, 90, 135].forEach(angleDeg => {
+      gctx.save();
+      gctx.translate(x, y);
+      gctx.rotate(angleDeg * Math.PI / 180);
+      const spikeGrad = gctx.createLinearGradient(-spikeLen, 0, spikeLen, 0);
+      spikeGrad.addColorStop(0,   'rgba(245,158,11,0)');
+      spikeGrad.addColorStop(0.5, 'rgba(255,255,255,0.9)');
+      spikeGrad.addColorStop(1,   'rgba(245,158,11,0)');
+      gctx.strokeStyle = spikeGrad;
+      gctx.lineWidth = 1.2;
+      gctx.beginPath();
+      gctx.moveTo(-spikeLen, 0);
+      gctx.lineTo(spikeLen, 0);
+      gctx.stroke();
+      gctx.restore();
+    });
+
+    // 3. 輝く中心の核
+    gctx.globalCompositeOperation = 'source-over';
+    gctx.shadowColor = 'rgba(245,158,11,0.9)';
+    gctx.shadowBlur = 8;
+    gctx.beginPath();
+    gctx.arc(x, y, 3, 0, Math.PI * 2);
+    gctx.fillStyle = '#fffdf5';
+    gctx.fill();
+
+    gctx.restore();
+  }
 
   const ctx = document.getElementById('emotionChart').getContext('2d');
   if (emotionChart) emotionChart.destroy();
