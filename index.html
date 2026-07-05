@@ -574,10 +574,10 @@ footer {
         <img src="Time_Line_Viewer.png" alt="Timeline Viewer を開く" style="height:24px;width:auto;object-fit:contain;" onerror="this.replaceWith(document.createTextNode('Timeline Viewer を開く'))">
       </a>
       <a href="Chat.html" class="btn-sub">
-        <img src="Genesis_pipe_Logo.png" alt="AI Chat（Titan）" style="height:34px;width:auto;object-fit:contain;" onerror="this.replaceWith(document.createTextNode('AI Chat（Titan）'))">
+        <img src="Genesis_pipe_Logo.png" alt="AI Chat（Titan）" style="height:46px;width:auto;object-fit:contain;" onerror="this.replaceWith(document.createTextNode('AI Chat（Titan）'))">
       </a>
       <a href="ReviewViewer.html" class="btn-sub">
-        <img src="Weekly_Review_and_Plan_Logo.png" alt="Weekly Review" style="height:34px;width:auto;object-fit:contain;" onerror="this.replaceWith(document.createTextNode('Weekly Review'))">
+        <img src="Weekly_Review_and_Plan_Logo.png" alt="Weekly Review" style="height:46px;width:auto;object-fit:contain;" onerror="this.replaceWith(document.createTextNode('Weekly Review'))">
       </a>
     </div>
 
@@ -648,11 +648,14 @@ function drawSynapse() {
       }
     }
     const n = nodes[i];
-    const twinkle = 0.3 + 0.18 * Math.sin(Date.now() * 0.001 * n.twinkleSpeed + n.twinklePhase);
+    const twinkle = 0.55 + 0.35 * Math.sin(Date.now() * 0.001 * n.twinkleSpeed + n.twinklePhase);
     ctx.beginPath();
-    ctx.arc(n.x, n.y, 1.5, 0, Math.PI*2);
+    ctx.arc(n.x, n.y, 2, 0, Math.PI*2);
     ctx.fillStyle = `rgba(255,255,255,${twinkle.toFixed(3)})`;
+    ctx.shadowColor = 'rgba(255,255,255,0.8)';
+    ctx.shadowBlur = 3;
     ctx.fill();
+    ctx.shadowBlur = 0;
   }
   requestAnimationFrame(drawSynapse);
 }
