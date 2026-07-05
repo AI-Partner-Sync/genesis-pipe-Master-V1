@@ -295,6 +295,31 @@ header {
   margin-bottom: 48px;
 }
 
+/* 中央テキスト・ボタンが遠くから浮かび上がる演出 */
+@keyframes zoomFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.6) translateY(30px);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: blur(0);
+  }
+}
+.hero-title,
+.hero-desc,
+.cta-group > a {
+  opacity: 0;
+  animation: zoomFadeIn 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+.hero-title { animation-delay: 0.1s; }
+.hero-desc  { animation-delay: 0.35s; }
+.cta-group > a:nth-child(1) { animation-delay: 0.55s; }
+.cta-group > a:nth-child(2) { animation-delay: 0.7s; }
+.cta-group > a:nth-child(3) { animation-delay: 0.85s; }
+
 /* CTAボタン群 */
 .cta-group {
   display: flex;
@@ -590,7 +615,7 @@ function resize() {
 resize();
 window.addEventListener('resize', resize);
 
-for (let i = 0; i < 40; i++) {
+for (let i = 0; i < 90; i++) {
   nodes.push({
     x: Math.random() * window.innerWidth,
     y: Math.random() * window.innerHeight,
