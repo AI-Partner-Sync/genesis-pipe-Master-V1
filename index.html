@@ -373,7 +373,7 @@ header {
 }
 .btn-timeline:hover::before,
 .btn-timeline:active::before {
-  opacity: 1;
+  opacity: 0.5;
   animation-duration: 1s;
 }
 .btn-icon { font-size: 20px; }
@@ -419,7 +419,7 @@ header {
 }
 .btn-sub:hover::before,
 .btn-sub:active::before {
-  opacity: 1;
+  opacity: 0.5;
 }
 .btn-sub.disabled {
   opacity: 0.4;
@@ -615,7 +615,7 @@ function resize() {
 resize();
 window.addEventListener('resize', resize);
 
-for (let i = 0; i < 90; i++) {
+for (let i = 0; i < 180; i++) {
   nodes.push({
     x: Math.random() * window.innerWidth,
     y: Math.random() * window.innerHeight,
@@ -651,7 +651,7 @@ function drawSynapse() {
     const twinkle = 0.3 + 0.18 * Math.sin(Date.now() * 0.001 * n.twinkleSpeed + n.twinklePhase);
     ctx.beginPath();
     ctx.arc(n.x, n.y, 1.5, 0, Math.PI*2);
-    ctx.fillStyle = `rgba(245,158,11,${twinkle.toFixed(3)})`;
+    ctx.fillStyle = `rgba(255,255,255,${twinkle.toFixed(3)})`;
     ctx.fill();
   }
   requestAnimationFrame(drawSynapse);
