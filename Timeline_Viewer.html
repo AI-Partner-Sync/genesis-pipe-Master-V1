@@ -430,19 +430,41 @@ function buildChart(levelEntries, level = 'Daily') {
   const labels = sorted.map(e => labelFmt(e.date));
   const scores = sorted.map(e => e.score || 0);
   const pointColors = scores.map(s =>
-    s >= 500 ? '#f59e0b' : s >= 350 ? '#34d399' : s >= 200 ? '#fb923c' : '#f87171'
+    s >= 1000 ? '#dbeafe' : s >= 500 ? '#f59e0b' : s >= 350 ? '#34d399' : s >= 200 ? '#fb923c' : '#f87171'
   );
+
+  // score=1000の点だけ控えめな青白グローを重ね描きするプラグイン
+  const glowPlugin = {
+    id: 'scoreGlow',
+    afterDatasetsDraw(chart) {
+      const meta = chart.getDatasetMeta(0);
+      const gctx = chart.ctx;
+      meta.data.forEach((point, i) => {
+        if (scores[i] < 1000) return;
+        const { x, y } = point.getProps(['x', 'y'], true);
+        gctx.save();
+        gctx.shadowColor = 'rgba(191,219,254,0.85)';
+        gctx.shadowBlur = 10;
+        gctx.beginPath();
+        gctx.arc(x, y, 2.5, 0, Math.PI * 2);
+        gctx.fillStyle = '#eff6ff';
+        gctx.fill();
+        gctx.restore();
+      });
+    }
+  };
 
   const ctx = document.getElementById('emotionChart').getContext('2d');
   if (emotionChart) emotionChart.destroy();
 
   emotionChart = new Chart(ctx, {
     type: 'line',
+    plugins: [glowPlugin],
     data: {
       labels,
       datasets: [{
         data: scores,
-        borderColor: 'rgba(245,158,11,0.7)',
+        borderColor: 'rgba(255,255,255,0.8)',
         backgroundColor: (context) => {
           const grad = context.chart.ctx.createLinearGradient(0, 0, 0, 150);
           grad.addColorStop(0, 'rgba(245,158,11,0.15)');
@@ -455,7 +477,7 @@ function buildChart(levelEntries, level = 'Daily') {
         pointHoverRadius: 5,
         tension: 0.35,
         fill: true,
-        borderWidth: 2,
+        borderWidth: 1.5,
       }]
     },
     options: {
