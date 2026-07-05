@@ -383,6 +383,8 @@ header {
   animation: spin-gold 7s linear infinite;
   z-index: -2;
   pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s;
 }
 @keyframes spin-border { to { --ta: 360deg; } }
 @keyframes spin-gold   { to { --tg: 360deg; } }
@@ -398,6 +400,10 @@ header {
 .btn-timeline:active::before {
   opacity: 0.5;
   animation-duration: 2.5s;
+}
+.btn-timeline:hover::after,
+.btn-timeline:active::after {
+  opacity: 1;
 }
 .btn-icon { font-size: 20px; }
 
@@ -448,6 +454,8 @@ header {
   animation: spin-gold 7s linear infinite;
   z-index: -2;
   pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s;
 }
 .btn-sub:hover,
 .btn-sub:active {
@@ -461,6 +469,10 @@ header {
 .btn-sub:active::before {
   opacity: 0.5;
   animation-duration: 2.5s;
+}
+.btn-sub:hover::after,
+.btn-sub:active::after {
+  opacity: 1;
 }
 .btn-sub.disabled {
   opacity: 0.4;
