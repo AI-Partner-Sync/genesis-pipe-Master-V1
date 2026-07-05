@@ -334,6 +334,7 @@ header {
 .btn-timeline {
   position: relative;
   width: 100%;
+  min-height: 76px;
   padding: 16px 32px;
   border-radius: 14px;
   border: 1px solid var(--navy-700);
@@ -350,6 +351,7 @@ header {
   justify-content: center;
   gap: 10px;
   backdrop-filter: blur(8px);
+  box-sizing: border-box;
 }
 .btn-timeline::before {
   content: '';
@@ -357,12 +359,22 @@ header {
   inset: -2px;
   border-radius: 16px;
   background: conic-gradient(from var(--ta), #ef4444, #f97316, #eab308, #22c55e, #3b82f6, #6366f1, #a855f7, #ef4444);
-  animation: spin-border 3s linear infinite;
+  animation: spin-border 6s linear infinite;
   z-index: -1;
   opacity: 0;
   transition: opacity 0.2s;
 }
+.btn-timeline::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 16px;
+  background: conic-gradient(from var(--tg), transparent 0%, transparent 85%, var(--gold) 92%, #fff7d6 96%, var(--gold) 100%);
+  animation: spin-gold 7s linear infinite;
+  z-index: -2;
+}
 @keyframes spin-border { to { --ta: 360deg; } }
+@keyframes spin-gold   { to { --tg: 360deg; } }
 .btn-timeline:hover,
 .btn-timeline:active {
   border-color: transparent;
@@ -374,7 +386,7 @@ header {
 .btn-timeline:hover::before,
 .btn-timeline:active::before {
   opacity: 0.5;
-  animation-duration: 1s;
+  animation-duration: 2.5s;
 }
 .btn-icon { font-size: 20px; }
 
@@ -382,6 +394,7 @@ header {
 .btn-sub {
   position: relative;
   width: 100%;
+  min-height: 76px;
   padding: 12px 24px;
   border-radius: 10px;
   border: 1px solid var(--navy-700);
@@ -397,6 +410,7 @@ header {
   gap: 8px;
   transition: all 0.15s;
   backdrop-filter: blur(8px);
+  box-sizing: border-box;
 }
 .btn-sub::before {
   content: '';
@@ -404,10 +418,19 @@ header {
   inset: -2px;
   border-radius: 12px;
   background: conic-gradient(from var(--ta), #ef4444, #f97316, #eab308, #22c55e, #3b82f6, #6366f1, #a855f7, #ef4444);
-  animation: spin-border 3s linear infinite;
+  animation: spin-border 6s linear infinite;
   z-index: -1;
   opacity: 0;
   transition: opacity 0.2s;
+}
+.btn-sub::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 12px;
+  background: conic-gradient(from var(--tg), transparent 0%, transparent 85%, var(--gold) 92%, #fff7d6 96%, var(--gold) 100%);
+  animation: spin-gold 7s linear infinite;
+  z-index: -2;
 }
 .btn-sub:hover,
 .btn-sub:active {
@@ -420,6 +443,7 @@ header {
 .btn-sub:hover::before,
 .btn-sub:active::before {
   opacity: 0.5;
+  animation-duration: 2.5s;
 }
 .btn-sub.disabled {
   opacity: 0.4;
@@ -640,7 +664,7 @@ function drawSynapse() {
       const dist = Math.sqrt(dx*dx + dy*dy);
       if (dist < 160) {
         ctx.beginPath();
-        ctx.strokeStyle = `rgba(245,158,11,${0.12 * (1 - dist/160)})`;
+        ctx.strokeStyle = `rgba(255,255,255,${0.35 * (1 - dist/160)})`;
         ctx.lineWidth = 0.5;
         ctx.moveTo(nodes[i].x, nodes[i].y);
         ctx.lineTo(nodes[j].x, nodes[j].y);
