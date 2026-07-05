@@ -329,9 +329,11 @@ header {
   position: absolute;
   inset: -2px;
   border-radius: 16px;
-  background: conic-gradient(from var(--ta), var(--gold), #a855f7, #38bdf8, var(--gold));
+  background: conic-gradient(from var(--ta), #ef4444, #f97316, #eab308, #22c55e, #3b82f6, #6366f1, #a855f7, #ef4444);
   animation: spin-border 3s linear infinite;
   z-index: -1;
+  opacity: 0;
+  transition: opacity 0.2s;
 }
 @keyframes spin-border { to { --ta: 360deg; } }
 .btn-timeline:hover,
@@ -344,6 +346,7 @@ header {
 }
 .btn-timeline:hover::before,
 .btn-timeline:active::before {
+  opacity: 1;
   animation-duration: 1s;
 }
 .btn-icon { font-size: 20px; }
@@ -373,7 +376,7 @@ header {
   position: absolute;
   inset: -2px;
   border-radius: 12px;
-  background: conic-gradient(from var(--ta), var(--gold), #a855f7, #38bdf8, #10b981, var(--gold));
+  background: conic-gradient(from var(--ta), #ef4444, #f97316, #eab308, #22c55e, #3b82f6, #6366f1, #a855f7, #ef4444);
   animation: spin-border 3s linear infinite;
   z-index: -1;
   opacity: 0;
@@ -546,7 +549,7 @@ footer {
         Timeline Viewer を開く
       </a>
       <a href="Chat.html" class="btn-sub">
-        AI Chat（Titan）
+        <img src="Genesis_pipe_Logo.png" alt="AI Chat（Titan）" style="height:22px;width:auto;object-fit:contain;" onerror="this.replaceWith(document.createTextNode('AI Chat（Titan）'))">
       </a>
       <a href="ReviewViewer.html" class="btn-sub">
         Weekly Review
