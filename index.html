@@ -304,25 +304,26 @@ header {
   max-width: 360px;
 }
 
-/* Timeline Viewer メインボタン（スピニングボーダー） */
+/* Timeline Viewer メインボタン（他ボタンと同じグレー基調） */
 .btn-timeline {
   position: relative;
   width: 100%;
   padding: 16px 32px;
   border-radius: 14px;
-  border: none;
+  border: 1px solid var(--navy-700);
   cursor: pointer;
   font-size: 16px;
   font-weight: 700;
-  color: var(--navy-950);
-  background: linear-gradient(135deg, var(--gold) 0%, #fcd34d 100%);
+  color: #94a3b8;
+  background: rgba(30,41,59,0.6);
   letter-spacing: 0.03em;
-  transition: transform 0.15s, box-shadow 0.15s;
+  transition: all 0.15s;
   text-decoration: none;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
+  backdrop-filter: blur(8px);
 }
 .btn-timeline::before {
   content: '';
@@ -338,11 +339,11 @@ header {
 @keyframes spin-border { to { --ta: 360deg; } }
 .btn-timeline:hover,
 .btn-timeline:active {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 32px rgba(245,158,11,0.4),
-              0 0 24px 4px rgba(245,158,11,0.5),
-              0 0 44px 10px rgba(168,85,247,0.35),
-              0 0 64px 16px rgba(56,189,248,0.25);
+  border-color: transparent;
+  color: var(--gold);
+  background: var(--gold-dim);
+  box-shadow: 0 0 20px 2px rgba(245,158,11,0.35),
+              0 0 36px 8px rgba(168,85,247,0.25);
 }
 .btn-timeline:hover::before,
 .btn-timeline:active::before {
@@ -533,7 +534,6 @@ footer {
   </header>
 
   <section class="hero">
-    <img src="Genesis_pipe_Logo.png" class="hero-logo" alt="logo" onerror="this.style.display='none'">
 
     <h1 class="hero-title">
       Growth Record<br><span>Timeline Viewer</span>
@@ -549,7 +549,7 @@ footer {
         Timeline Viewer を開く
       </a>
       <a href="Chat.html" class="btn-sub">
-        <img src="Genesis_pipe_Logo.png" alt="AI Chat（Titan）" style="height:22px;width:auto;object-fit:contain;" onerror="this.replaceWith(document.createTextNode('AI Chat（Titan）'))">
+        <img src="Genesis_pipe_Logo.png" alt="AI Chat（Titan）" style="height:34px;width:auto;object-fit:contain;" onerror="this.replaceWith(document.createTextNode('AI Chat（Titan）'))">
       </a>
       <a href="ReviewViewer.html" class="btn-sub">
         Weekly Review
