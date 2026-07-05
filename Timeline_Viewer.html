@@ -273,7 +273,7 @@ header h1 { font-size: 16px; font-weight: 700; color: var(--gold); letter-spacin
 </header>
 
 <div class="chart-section">
-  <div class="section-label">DAILY EMOTION ARC</div>
+  <div class="section-label" id="chart-title">DAILY EMOTION ARC</div>
   <div class="chart-wrapper">
     <canvas id="emotionChart"></canvas>
   </div>
@@ -307,7 +307,7 @@ async function loadData() {
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     allEntries = Array.isArray(data) ? data : [];
-    buildChart(allEntries.filter(e => e.level === 'Daily'));
+    buildChart(allEntries.filter(e => e.level === 'Daily'), 'Daily');
     render();
     document.getElementById('entry-count').textContent = allEntries.length + ' entries';
   } catch(err) {
@@ -326,6 +326,9 @@ function setFilter(f) {
     const match = (f === 'ALL' && cls === 'all') || cls === f.toLowerCase();
     b.classList.toggle('active', match);
   });
+  const chartLevel = f === 'ALL' ? 'Daily' : f;
+  buildChart(allEntries.filter(e => e.level === chartLevel), chartLevel);
+  document.getElementById('chart-title').textContent = chartLevel.toUpperCase() + ' EMOTION ARC';
   render();
 }
 
@@ -414,14 +417,17 @@ function toggleDetail(id, btn) {
   btn.textContent = open ? '▼ 閉じる' : '▶ 詳細を見る';
 }
 
-function buildChart(dailyEntries) {
-  const sorted = [...dailyEntries]
+function buildChart(levelEntries, level = 'Daily') {
+  const sorted = [...levelEntries]
     .filter(e => e.date)
     .sort((a, b) => new Date(a.date) - new Date(b.date));
 
   if (!sorted.length) return;
 
-  const labels = sorted.map(e => e.date.substring(5));
+  const labelFmt = level === 'Annual'  ? (d => d.substring(0, 4))
+                  : level === 'Monthly' ? (d => d.substring(0, 7))
+                  : (d => d.substring(5));
+  const labels = sorted.map(e => labelFmt(e.date));
   const scores = sorted.map(e => e.score || 0);
   const pointColors = scores.map(s =>
     s >= 500 ? '#f59e0b' : s >= 350 ? '#34d399' : s >= 200 ? '#fb923c' : '#f87171'
@@ -445,8 +451,8 @@ function buildChart(dailyEntries) {
         },
         pointBackgroundColor: pointColors,
         pointBorderColor: pointColors,
-        pointRadius: 4,
-        pointHoverRadius: 7,
+        pointRadius: 2.5,
+        pointHoverRadius: 5,
         tension: 0.35,
         fill: true,
         borderWidth: 2,
@@ -487,10 +493,10 @@ function buildChart(dailyEntries) {
         if (!elements.length) return;
         const target = sorted[elements[0].index];
         const entryIdx = allEntries.findIndex(
-          e => e.date === target.date && e.level === 'Daily'
+          e => e.date === target.date && e.level === level
         );
         if (entryIdx < 0) return;
-        if (currentFilter !== 'ALL' && currentFilter !== 'Daily') setFilter('Daily');
+        if (currentFilter !== 'ALL' && currentFilter !== level) setFilter(level);
         setTimeout(() => {
           const el = document.getElementById('entry-' + entryIdx);
           if (!el) return;
