@@ -1,7 +1,7 @@
 // AI Partner Sync Master — 共通設定（index.html / Timeline_Viewer.html / Chat.html で共有）
 const APS_STORAGE_KEY = 'aps_master_v1';
 const APS_DEFAULTS = {
-  gasUrl: 'https://script.google.com/macros/s/AKfycby45pWuHOr7mmtoFTX0Vj5DTkmXYPXHixUxZckXhwqsk5cD7wfYwA6D9ShNxOutdhNu/exec',
+  gasUrl: '',
   userName: 'Rikki',
   aiName: 'Titan',
   ttsEnabled: false,
