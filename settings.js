@@ -8,6 +8,7 @@ const APS_DEFAULTS = {
   ttsVoice: 'ja-JP-Neural2-C',
   ttsRate: 0.93,
   ttsPitch: 0.0,
+  ttsVolume: 1.0,
 };
 
 function apsLoadSettings() {
