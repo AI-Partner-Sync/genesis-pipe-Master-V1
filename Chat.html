@@ -661,19 +661,32 @@ let currentAudio = null;
    モバイル音声再生の解錠（iOS Safari等の自動再生ポリシー対策）
    Cloud TTSの再生は「送信→AI返信fetch→TTS fetch」と非同期を2回挟むため、
    タップした瞬間のユーザー操作コンテキストから切り離されてしまい、
-   モバイルではAudio.play()/speechSynthesis.speak()がエラーなく無音でブロックされる。
-   対策：送信・マイクボタンをタップした瞬間（同期的な文脈）に無音を1回再生して
-   同じ<audio>要素を解錠しておき、後から非同期で届く本物の音声もその要素を使い回す。
+   モバイルではAudio.play()がエラーなく無音でブロックされることがある。
+   対策：Web Audio API（AudioContext）を使う。ブラウザの自動再生ポリシーは
+   「個々のplay()呼び出し」ではなく「AudioContext自体が一度でもユーザー操作の
+   中で起動されたか」だけを見るため、タップの瞬間にAudioContextを起動・解錠
+   しておけば、後から非同期で届く本物の音声も同じcontextで問題なく再生できる
+   （genesis-pipe-Public_V3と同じ方式に統一・2026-07-18）。
 ══════════════════════════════════════════ */
-const SILENT_AUDIO_SRC = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEAQB8AAEAfAAABAAgAAABmYWN0BAAAAAAAAABkYXRhAAAAAA==';
-let ttsAudioEl = null;
+let ttsAudioCtx = null;
+let ttsAudioSrc = null;
+let ttsAudioEl = null; // decodeAudioData失敗時のみのフォールバック用
 let audioUnlocked = false;
+function getTtsAudioCtx() {
+  if (!ttsAudioCtx) ttsAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return ttsAudioCtx;
+}
 function unlockAudioPlayback() {
   if (audioUnlocked) return;
-  if (!ttsAudioEl) ttsAudioEl = new Audio();
-  ttsAudioEl.src = SILENT_AUDIO_SRC;
-  const p = ttsAudioEl.play();
-  if (p && p.catch) p.catch(() => {});
+  try {
+    const ctx = getTtsAudioCtx();
+    if (ctx.state === 'suspended') ctx.resume();
+    const buf = ctx.createBuffer(1, 1, 22050);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(ctx.destination);
+    src.start(0);
+  } catch (e) {}
   audioUnlocked = true;
   // speechSynthesisフォールバック側も同じタイミングで解錠しておく
   if (window.speechSynthesis) {
@@ -822,6 +835,7 @@ function handleSend() {
 function speakText(text) {
   const s = apsLoadSettings();
   if (!s.ttsEnabled) return;
+  if (ttsAudioSrc) { try { ttsAudioSrc.stop(); } catch (e) {} ttsAudioSrc = null; }
   if (currentAudio) { currentAudio.pause(); currentAudio = null; }
   window.speechSynthesis && window.speechSynthesis.cancel();
   const plain = text.replace(/<[^>]*>/g, '').substring(0, 4000);
@@ -834,13 +848,31 @@ function speakText(text) {
     .then(r => r.json())
     .then(data => {
       if (data && data.audioContent) {
-        // 解錠済みの<audio>要素を使い回す（モバイルで新規Audio()は非同期文脈だと再生ブロックされるため）
-        if (!ttsAudioEl) ttsAudioEl = new Audio();
-        ttsAudioEl.src = 'data:audio/mp3;base64,' + data.audioContent;
-        ttsAudioEl.volume = s.ttsVolume;
-        currentAudio = ttsAudioEl;
-        currentAudio.play().catch(() => fallbackSpeak(plain, s.ttsRate, s.ttsVolume));
-        currentAudio.onended = () => { currentAudio = null; };
+        try {
+          const ctx = getTtsAudioCtx();
+          // 長時間放置後にiOSがcontextをsuspendしていることがあるため念のため resume
+          if (ctx.state === 'suspended') { ctx.resume().catch(() => {}); }
+          const bytes = Uint8Array.from(atob(data.audioContent), c => c.charCodeAt(0));
+          ctx.decodeAudioData(bytes.buffer, function (buffer) {
+            if (ttsAudioSrc) { try { ttsAudioSrc.stop(); } catch (e) {} }
+            ttsAudioSrc = ctx.createBufferSource();
+            ttsAudioSrc.buffer = buffer;
+            const gainNode = ctx.createGain();
+            gainNode.gain.value = s.ttsVolume;
+            ttsAudioSrc.connect(gainNode);
+            gainNode.connect(ctx.destination);
+            ttsAudioSrc.start(0);
+            ttsAudioSrc.onended = function () { ttsAudioSrc = null; };
+          }, function () { fallbackSpeak(plain, s.ttsRate, s.ttsVolume); });
+        } catch (e) {
+          // Web Audio APIが使えない環境向けの最終フォールバック
+          if (!ttsAudioEl) ttsAudioEl = new Audio();
+          ttsAudioEl.src = 'data:audio/mp3;base64,' + data.audioContent;
+          ttsAudioEl.volume = s.ttsVolume;
+          currentAudio = ttsAudioEl;
+          currentAudio.play().catch(() => fallbackSpeak(plain, s.ttsRate, s.ttsVolume));
+          currentAudio.onended = () => { currentAudio = null; };
+        }
       } else {
         fallbackSpeak(plain, s.ttsRate, s.ttsVolume);
       }
