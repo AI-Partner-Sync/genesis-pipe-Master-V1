@@ -650,6 +650,32 @@ footer {
 
 let conversationHistory = '';
 let currentAudio = null;
+
+/* ══════════════════════════════════════════
+   モバイル音声再生の解錠（iOS Safari等の自動再生ポリシー対策）
+   Cloud TTSの再生は「送信→AI返信fetch→TTS fetch」と非同期を2回挟むため、
+   タップした瞬間のユーザー操作コンテキストから切り離されてしまい、
+   モバイルではAudio.play()/speechSynthesis.speak()がエラーなく無音でブロックされる。
+   対策：送信・マイクボタンをタップした瞬間（同期的な文脈）に無音を1回再生して
+   同じ<audio>要素を解錠しておき、後から非同期で届く本物の音声もその要素を使い回す。
+══════════════════════════════════════════ */
+const SILENT_AUDIO_SRC = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEAQB8AAEAfAAABAAgAAABmYWN0BAAAAAAAAABkYXRhAAAAAA==';
+let ttsAudioEl = null;
+let audioUnlocked = false;
+function unlockAudioPlayback() {
+  if (audioUnlocked) return;
+  if (!ttsAudioEl) ttsAudioEl = new Audio();
+  ttsAudioEl.src = SILENT_AUDIO_SRC;
+  const p = ttsAudioEl.play();
+  if (p && p.catch) p.catch(() => {});
+  audioUnlocked = true;
+  // speechSynthesisフォールバック側も同じタイミングで解錠しておく
+  if (window.speechSynthesis) {
+    const unlockUtter = new SpeechSynthesisUtterance('');
+    unlockUtter.volume = 0;
+    window.speechSynthesis.speak(unlockUtter);
+  }
+}
 const chatArea  = document.getElementById('chat-area');
 const textInput = document.getElementById('text-input');
 
@@ -748,6 +774,7 @@ function saveConversationLog() {
 function handleSend() {
   const text = textInput.value.trim();
   if (!text) return;
+  unlockAudioPlayback();
   if (isRecording && recognition) recognition.stop();
   const s = apsLoadSettings();
   addBubble(text, 'user');
@@ -801,7 +828,10 @@ function speakText(text) {
     .then(r => r.json())
     .then(data => {
       if (data && data.audioContent) {
-        currentAudio = new Audio('data:audio/mp3;base64,' + data.audioContent);
+        // 解錠済みの<audio>要素を使い回す（モバイルで新規Audio()は非同期文脈だと再生ブロックされるため）
+        if (!ttsAudioEl) ttsAudioEl = new Audio();
+        ttsAudioEl.src = 'data:audio/mp3;base64,' + data.audioContent;
+        currentAudio = ttsAudioEl;
         currentAudio.play().catch(() => fallbackSpeak(plain, s.ttsRate));
         currentAudio.onended = () => { currentAudio = null; };
       } else {
@@ -939,6 +969,7 @@ if (SpeechRecognitionAPI) {
 
 function toggleRecording() {
   if (!recognition) { addBubble('このブラウザは音声入力に対応していません', 'system'); return; }
+  unlockAudioPlayback();
   isRecording ? recognition.stop() : recognition.start();
 }
 </script>
