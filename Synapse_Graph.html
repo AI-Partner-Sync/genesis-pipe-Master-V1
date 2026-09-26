@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI Partner Sync — Synapse Graph</title>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
+<script src="settings.js"></script>
+<style>
+:root {
+  --navy-950: #0a0f1e;
+  --navy-900: #0f172a;
+  --navy-800: #1e293b;
+  --navy-700: #334155;
+  --gold: #f59e0b;
+  --annual-c: #a855f7;
+  --monthly-c: #38bdf8;
+  --weekly-c: #34d399;
+  --daily-c: #94a3b8;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  background: var(--navy-950);
+  color: #e2e8f0;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  height: 100%;
+  overflow: hidden;
+}
+
+header {
+  background: var(--navy-900);
+  border-bottom: 1px solid var(--navy-700);
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+  z-index: 100;
+}
+.header-left { display: flex; align-items: center; gap: 12px; }
+.back-btn {
+  color: #64748b;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  padding: 4px;
+  border-radius: 8px;
+  transition: color 0.15s;
+}
+.back-btn:hover { color: var(--gold); }
+header h1 { font-size: 16px; font-weight: 700; color: var(--gold); letter-spacing: 0.05em; }
+.subtitle { font-size: 11px; color: #475569; margin-top: 2px; }
+.header-right { font-size: 11px; color: #475569; }
+
+.filter-bar {
+  padding: 12px 24px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  background: var(--navy-900);
+  border-bottom: 1px solid var(--navy-700);
+  position: relative;
+  z-index: 99;
+}
+.filter-btn {
+  padding: 5px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--navy-700);
+  background: transparent;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  letter-spacing: 0.03em;
+}
+.filter-btn:hover { border-color: var(--gold); color: var(--gold); }
+.filter-btn.all.active     { background: var(--gold);      border-color: var(--gold);      color: var(--navy-950); }
+.filter-btn.annual.active  { background: var(--annual-c);  border-color: var(--annual-c);  color: #fff; }
+.filter-btn.monthly.active { background: var(--monthly-c); border-color: var(--monthly-c); color: var(--navy-950); }
+.filter-btn.weekly.active  { background: var(--weekly-c);  border-color: var(--weekly-c);  color: var(--navy-950); }
+.filter-btn.daily.active   { background: var(--daily-c);   border-color: var(--daily-c);   color: var(--navy-950); }
+
+.legend {
+  margin-left: auto;
+  display: flex;
+  gap: 12px;
+  font-size: 10px;
+  color: #475569;
+}
+.legend-item { display: flex; align-items: center; gap: 5px; }
+.legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+.stage {
+  position: relative;
+  height: calc(100vh - 118px);
+}
+#graph {
+  width: 100%;
+  height: 100%;
+}
+
+.loading, .empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #475569;
+  font-size: 14px;
+  line-height: 2;
+  text-align: center;
+  padding: 20px;
+}
+.spinner {
+  width: 32px; height: 32px;
+  border: 3px solid var(--navy-700);
+  border-top-color: var(--gold);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: 16px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* 詳細パネル */
+.detail-panel {
+  position: absolute;
+  top: 0;
+  right: -360px;
+  width: 340px;
+  height: 100%;
+  background: var(--navy-900);
+  border-left: 1px solid var(--navy-700);
+  padding: 20px;
+  overflow-y: auto;
+  transition: right 0.25s ease;
+  z-index: 50;
+}
+.detail-panel.open { right: 0; }
+.detail-close {
+  background: none;
+  border: none;
+  color: #475569;
+  cursor: pointer;
+  float: right;
+  font-size: 18px;
+  line-height: 1;
+}
+.detail-close:hover { color: var(--gold); }
+.badge {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 8px;
+  letter-spacing: 0.06em;
+  margin-bottom: 8px;
+}
+.badge.Annual  { background: var(--annual-c);  color: #fff; }
+.badge.Monthly { background: var(--monthly-c); color: var(--navy-950); }
+.badge.Weekly  { background: var(--weekly-c);  color: var(--navy-950); }
+.badge.Daily   { background: var(--daily-c);   color: var(--navy-950); }
+.detail-date { font-size: 13px; color: #cbd5e1; margin-bottom: 14px; clear: both; }
+.detail-row { margin-bottom: 14px; }
+.detail-label {
+  font-size: 9px;
+  color: #475569;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  margin-bottom: 4px;
+}
+.detail-value { font-size: 12px; color: #94a3b8; line-height: 1.65; white-space: pre-wrap; }
+.detail-hint {
+  margin-top: 20px;
+  padding-top: 14px;
+  border-top: 1px solid var(--navy-700);
+  font-size: 10.5px;
+  color: #475569;
+  line-height: 1.6;
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <a href="index.html" class="back-btn" title="Home pageへ戻る"><span class="material-icons">arrow_back</span></a>
+    <div>
+      <h1>AI Partner Sync</h1>
+      <div class="subtitle">Synapse Graph — 伏線回収の地図</div>
+    </div>
+  </div>
+  <div class="header-right" id="entry-count"></div>
+</header>
+
+<div class="filter-bar">
+  <button class="filter-btn all active" onclick="setFilter('ALL')">ALL</button>
+  <button class="filter-btn annual"     onclick="setFilter('Annual')">Annual</button>
+  <button class="filter-btn monthly"    onclick="setFilter('Monthly')">Monthly</button>
+  <button class="filter-btn weekly"     onclick="setFilter('Weekly')">Weekly</button>
+  <button class="filter-btn daily"      onclick="setFilter('Daily')">Daily</button>
+  <div class="legend">
+    <span class="legend-item"><span class="legend-dot" style="background:var(--daily-c)"></span>Daily</span>
+    <span class="legend-item"><span class="legend-dot" style="background:var(--weekly-c)"></span>Weekly</span>
+    <span class="legend-item"><span class="legend-dot" style="background:var(--monthly-c)"></span>Monthly</span>
+    <span class="legend-item"><span class="legend-dot" style="background:var(--annual-c)"></span>Annual</span>
+  </div>
+</div>
+
+<div class="stage">
+  <div id="graph"></div>
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    データを読み込み中...
+  </div>
+  <div class="detail-panel" id="detail-panel">
+    <button class="detail-close" onclick="closeDetail()">&times;</button>
+    <div id="detail-body"></div>
+  </div>
+</div>
+
+<script>
+let allEntries = [];
+let network = null;
+let currentFilter = 'ALL';
+let nodeIndex = new Map();
+
+const LEVEL_COLOR = { Daily: '#94a3b8', Weekly: '#34d399', Monthly: '#38bdf8', Annual: '#a855f7' };
+const LEVEL_SIZE  = { Daily: 8, Weekly: 13, Monthly: 18, Annual: 24 };
+
+function nodeId(level, date) { return level + '::' + date; }
+
+async function loadData() {
+  try {
+    const gasUrl = apsLoadSettings().gasUrl;
+    if (!gasUrl) throw new Error('GAS URLが未設定です');
+    const sep = gasUrl.includes('?') ? '&' : '?';
+    const res = await fetch(gasUrl + sep + 'page=timeline_data');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    allEntries = (Array.isArray(data) ? data : []).filter(e => e.date);
+    document.getElementById('entry-count').textContent = allEntries.length + ' entries';
+    document.getElementById('loading').style.display = 'none';
+    setFilter('ALL');
+  } catch (err) {
+    document.getElementById('loading').innerHTML =
+      `<div class="empty">データ取得に失敗しました。<br>
+      <small style="color:#334155">${err.message}</small><br><br>
+      <small>index.html の設定（⚙️）からGAS URLを確認してください。</small></div>`;
+    console.error(err);
+  }
+}
+
+function setFilter(f) {
+  currentFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => {
+    const cls = [...b.classList].find(c => c !== 'filter-btn' && c !== 'active') || '';
+    const match = (f === 'ALL' && cls === 'all') || cls === f.toLowerCase();
+    b.classList.toggle('active', match);
+  });
+  closeDetail();
+  buildGraph();
+}
+
+// synapse_link の先頭「YYYY-MM-DD:」から参照先の日付だけを取り出す
+function extractLinkedDate(synapseLink) {
+  if (!synapseLink) return null;
+  const m = String(synapseLink).match(/^(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] : null;
+}
+
+function buildGraph() {
+  const entries = currentFilter === 'ALL'
+    ? allEntries
+    : allEntries.filter(e => e.level === currentFilter);
+
+  if (!entries.length) {
+    document.getElementById('loading').style.display = 'flex';
+    document.getElementById('loading').innerHTML = '<div class="empty">表示できるデータがありません</div>';
+    return;
+  }
+  document.getElementById('loading').style.display = 'none';
+
+  nodeIndex = new Map();
+  const nodes = entries.map(e => {
+    const id = nodeId(e.level, e.date);
+    nodeIndex.set(id, e);
+    return {
+      id,
+      label: fmtLabel(e),
+      shape: 'dot',
+      size: LEVEL_SIZE[e.level] || 8,
+      color: {
+        background: LEVEL_COLOR[e.level] || '#94a3b8',
+        border: 'rgba(255,255,255,0.25)',
+        highlight: { background: '#fef9c3', border: '#f59e0b' },
+      },
+      font: { color: '#cbd5e1', size: 10, face: 'Segoe UI' },
+    };
+  });
+
+  // synapse_link の日付を辿ってエッジを構築（同じ階層内で一致するノードのみ）
+  const edgeSet = new Set();
+  const edges = [];
+  entries.forEach(e => {
+    const linkedDate = extractLinkedDate(e.synapse_link);
+    if (!linkedDate) return;
+    const fromId = nodeId(e.level, e.date);
+    const toId = nodeId(e.level, linkedDate);
+    if (toId === fromId || !nodeIndex.has(toId)) return;
+    const key = [fromId, toId].sort().join('|');
+    if (edgeSet.has(key)) return;
+    edgeSet.add(key);
+    edges.push({
+      from: fromId,
+      to: toId,
+      color: { color: 'rgba(245,158,11,0.35)', highlight: '#f59e0b', hover: '#f59e0b' },
+      width: 1.3,
+      smooth: { type: 'continuous', roundness: 0.4 },
+      arrows: { to: { enabled: true, scaleFactor: 0.35 } },
+    });
+  });
+
+  const container = document.getElementById('graph');
+  const options = {
+    physics: {
+      solver: 'forceAtlas2Based',
+      forceAtlas2Based: {
+        gravitationalConstant: -60,
+        springLength: 110,
+        springConstant: 0.09,
+        avoidOverlap: 0.6,
+      },
+      stabilization: { iterations: 200 },
+    },
+    interaction: { hover: true, tooltipDelay: 150, dragView: true, zoomView: true },
+    layout: { improvedLayout: true },
+  };
+
+  network = new vis.Network(container, { nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges) }, options);
+  network.once('stabilizationIterationsDone', () => network.fit({ animation: { duration: 400 } }));
+  network.on('click', params => {
+    if (params.nodes.length) {
+      showDetail(nodeIndex.get(params.nodes[0]));
+    } else {
+      closeDetail();
+    }
+  });
+}
+
+function fmtLabel(e) {
+  if (e.level === 'Annual')  return e.date.substring(0, 4);
+  if (e.level === 'Monthly') return e.date.substring(0, 7);
+  return e.date.substring(5);
+}
+
+function showDetail(e) {
+  if (!e) return;
+  const fields = [
+    ['SUMMARY', e.summary],
+    ['INSIGHT', e.insight],
+    ['KEYSTONE', e.keystone],
+    ['TOP3 ACTUAL', e.top3_actual],
+    ['TOP3 PLAN', e.top3_plan],
+    ['ACTIONS', e.actions],
+    ['TEACHING', e.teaching],
+    ['BREAKTHROUGH', e.major_breakthrough],
+    ['IDENTITY', e.identity_evolution],
+    ['PHILOSOPHY', e.year_philosophy],
+    ['LEGACY', e.legacy_testament],
+    ['APHORISM', e.aphorism],
+    ['伏線回収（synapse_link）', e.synapse_link],
+  ].filter(([, v]) => v);
+
+  const rows = fields.map(([label, val]) =>
+    `<div class="detail-row">
+      <div class="detail-label">${label}</div>
+      <div class="detail-value">${esc(val)}</div>
+    </div>`
+  ).join('');
+
+  document.getElementById('detail-body').innerHTML = `
+    <span class="badge ${e.level}">${e.level.toUpperCase()}</span>
+    <div class="detail-date">${esc(e.date_range || e.date)}</div>
+    ${rows}
+    <div class="detail-hint">線は synapse_link（AIが見つけた過去との関連）が指す日付へのリンクです。ノードをドラッグして配置を調整したり、ホイールでズームできます。</div>
+  `;
+  document.getElementById('detail-panel').classList.add('open');
+}
+
+function closeDetail() {
+  document.getElementById('detail-panel').classList.remove('open');
+}
+
+function esc(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+window.onload = loadData;
+</script>
+</body>
+</html>
