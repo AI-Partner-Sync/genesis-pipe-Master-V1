@@ -89,13 +89,44 @@ header h1 { font-size: 16px; font-weight: 700; color: var(--gold); letter-spacin
   gap: 12px;
   font-size: 10px;
   color: #475569;
+  flex-wrap: wrap;
 }
 .legend-item { display: flex; align-items: center; gap: 5px; }
 .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
 
+.mode-bar {
+  padding: 8px 24px 12px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  background: var(--navy-900);
+  border-bottom: 1px solid var(--navy-700);
+  position: relative;
+  z-index: 98;
+}
+.mode-label { font-size: 9px; color: #475569; font-weight: 700; letter-spacing: 0.1em; margin-right: 4px; }
+.mode-btn {
+  padding: 5px 13px;
+  border-radius: 20px;
+  border: 1px solid var(--navy-700);
+  background: transparent;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  letter-spacing: 0.02em;
+}
+.mode-btn:hover { border-color: var(--gold); color: var(--gold); }
+.mode-btn.active { background: var(--navy-700); border-color: #94a3b8; color: #e2e8f0; }
+.mode-btn.unfinished.active { background: rgba(248,113,113,0.15); border-color: #f87171; color: #f87171; }
+.mode-btn.enlightenment.active { background: rgba(254,249,195,0.14); border-color: #fbbf24; color: #fbbf24; }
+.mode-btn.emotion.active { background: rgba(245,158,11,0.15); border-color: var(--gold); color: var(--gold); }
+
 .stage {
   position: relative;
-  height: calc(100vh - 118px);
+  height: calc(100vh - 160px);
 }
 #graph {
   width: 100%;
@@ -202,12 +233,20 @@ header h1 { font-size: 16px; font-weight: 700; color: var(--gold); letter-spacin
   <button class="filter-btn monthly"    onclick="setFilter('Monthly')">Monthly</button>
   <button class="filter-btn weekly"     onclick="setFilter('Weekly')">Weekly</button>
   <button class="filter-btn daily"      onclick="setFilter('Daily')">Daily</button>
-  <div class="legend">
+  <div class="legend" id="legend">
     <span class="legend-item"><span class="legend-dot" style="background:var(--daily-c)"></span>Daily</span>
     <span class="legend-item"><span class="legend-dot" style="background:var(--weekly-c)"></span>Weekly</span>
     <span class="legend-item"><span class="legend-dot" style="background:var(--monthly-c)"></span>Monthly</span>
     <span class="legend-item"><span class="legend-dot" style="background:var(--annual-c)"></span>Annual</span>
   </div>
+</div>
+
+<div class="mode-bar">
+  <span class="mode-label">MODE</span>
+  <button class="mode-btn level active" onclick="setMode('level')">🎨 階層カラー</button>
+  <button class="mode-btn emotion"      onclick="setMode('emotion')">🌈 感情カラー</button>
+  <button class="mode-btn unfinished"   onclick="setMode('unfinished')">🔴 Unfinished Business</button>
+  <button class="mode-btn enlightenment" onclick="setMode('enlightenment')">✨ 悟りポイント</button>
 </div>
 
 <div class="stage">
@@ -226,12 +265,98 @@ header h1 { font-size: 16px; font-weight: 700; color: var(--gold); letter-spacin
 let allEntries = [];
 let network = null;
 let currentFilter = 'ALL';
+let currentMode = 'level'; // 'level' | 'emotion' | 'unfinished' | 'enlightenment'
 let nodeIndex = new Map();
 
 const LEVEL_COLOR = { Daily: '#94a3b8', Weekly: '#34d399', Monthly: '#38bdf8', Annual: '#a855f7' };
 const LEVEL_SIZE  = { Daily: 8, Weekly: 13, Monthly: 18, Annual: 24 };
+const FADE_COLOR  = { background: 'rgba(71,85,105,0.16)', border: 'rgba(71,85,105,0.16)', highlight: { background: 'rgba(71,85,105,0.3)', border: 'rgba(71,85,105,0.3)' } };
 
 function nodeId(level, date) { return level + '::' + date; }
+
+// Timeline Viewer（感情スコアの折れ線グラフ）と同じ配色基準。
+// 1000=悟りの黄金、500+=橙金、350+=緑、200+=橙、200未満=赤（未解決の課題）
+function scoreToColor(s) {
+  if (!s || s <= 0) return '#475569';
+  return s >= 1000 ? '#fef9c3' : s >= 500 ? '#f59e0b' : s >= 350 ? '#34d399' : s >= 200 ? '#fb923c' : '#f87171';
+}
+
+// 現在の表示モードに応じて、1ノード分の見た目（サイズ・色・後光）を決める
+function nodeStyleForMode(e) {
+  const baseSize = LEVEL_SIZE[e.level] || 8;
+
+  if (currentMode === 'emotion') {
+    const c = scoreToColor(e.score);
+    return {
+      size: baseSize,
+      color: { background: c, border: 'rgba(255,255,255,0.25)', highlight: { background: '#fffdf5', border: '#f59e0b' } },
+      shadow: e.score >= 1000
+        ? { enabled: true, color: 'rgba(254,249,195,0.9)', size: 22, x: 0, y: 0 }
+        : { enabled: false },
+    };
+  }
+
+  if (currentMode === 'unfinished') {
+    const hit = e.score > 0 && e.score < 200;
+    return {
+      size: hit ? baseSize * 1.5 : baseSize * 0.55,
+      color: hit
+        ? { background: '#f87171', border: '#fecaca', highlight: { background: '#fecaca', border: '#f87171' } }
+        : FADE_COLOR,
+      shadow: hit ? { enabled: true, color: 'rgba(248,113,113,0.85)', size: 20, x: 0, y: 0 } : { enabled: false },
+    };
+  }
+
+  if (currentMode === 'enlightenment') {
+    const hit = e.score >= 1000;
+    return {
+      size: hit ? baseSize * 1.6 : baseSize * 0.55,
+      color: hit
+        ? { background: '#fef9c3', border: '#fde68a', highlight: { background: '#fffdf5', border: '#f59e0b' } }
+        : FADE_COLOR,
+      shadow: hit ? { enabled: true, color: 'rgba(254,249,195,0.95)', size: 26, x: 0, y: 0 } : { enabled: false },
+    };
+  }
+
+  // 'level'（デフォルト）
+  return {
+    size: baseSize,
+    color: { background: LEVEL_COLOR[e.level] || '#94a3b8', border: 'rgba(255,255,255,0.25)', highlight: { background: '#fef9c3', border: '#f59e0b' } },
+    shadow: { enabled: false },
+  };
+}
+
+function setMode(m) {
+  currentMode = m;
+  document.querySelectorAll('.mode-btn').forEach(b => {
+    const cls = [...b.classList].find(c => c !== 'mode-btn' && c !== 'active') || '';
+    b.classList.toggle('active', cls === m);
+  });
+  updateLegend();
+  buildGraph();
+}
+
+function updateLegend() {
+  const legend = document.getElementById('legend');
+  if (currentMode === 'emotion') {
+    legend.innerHTML = `
+      <span class="legend-item"><span class="legend-dot" style="background:#fef9c3"></span>1000 悟り</span>
+      <span class="legend-item"><span class="legend-dot" style="background:#f59e0b"></span>500+</span>
+      <span class="legend-item"><span class="legend-dot" style="background:#34d399"></span>350+</span>
+      <span class="legend-item"><span class="legend-dot" style="background:#fb923c"></span>200+</span>
+      <span class="legend-item"><span class="legend-dot" style="background:#f87171"></span>200未満</span>`;
+  } else if (currentMode === 'unfinished') {
+    legend.innerHTML = `<span class="legend-item"><span class="legend-dot" style="background:#f87171"></span>感情スコア200未満（Unfinished Business）だけを点灯。他は淡くフェード</span>`;
+  } else if (currentMode === 'enlightenment') {
+    legend.innerHTML = `<span class="legend-item"><span class="legend-dot" style="background:#fef9c3"></span>感情スコア1000（悟り）だけを点灯。他は淡くフェード</span>`;
+  } else {
+    legend.innerHTML = `
+      <span class="legend-item"><span class="legend-dot" style="background:var(--daily-c)"></span>Daily</span>
+      <span class="legend-item"><span class="legend-dot" style="background:var(--weekly-c)"></span>Weekly</span>
+      <span class="legend-item"><span class="legend-dot" style="background:var(--monthly-c)"></span>Monthly</span>
+      <span class="legend-item"><span class="legend-dot" style="background:var(--annual-c)"></span>Annual</span>`;
+  }
+}
 
 async function loadData() {
   try {
@@ -333,16 +458,14 @@ function buildGraph() {
   const nodes = entries.map(e => {
     const id = nodeId(e.level, e.date);
     nodeIndex.set(id, e);
+    const style = nodeStyleForMode(e);
     return {
       id,
       label: fmtLabel(e),
       shape: 'dot',
-      size: LEVEL_SIZE[e.level] || 8,
-      color: {
-        background: LEVEL_COLOR[e.level] || '#94a3b8',
-        border: 'rgba(255,255,255,0.25)',
-        highlight: { background: '#fef9c3', border: '#f59e0b' },
-      },
+      size: style.size,
+      color: style.color,
+      shadow: style.shadow,
       font: { color: '#cbd5e1', size: 10, face: 'Segoe UI' },
     };
   });
@@ -410,8 +533,12 @@ function fmtLabel(e) {
 
 function showDetail(e) {
   if (!e) return;
+  const emotionText = (e.emotion && e.score)
+    ? `${e.emotion}（Score: ${e.score}）${e.score >= 1000 ? ' ✨ 悟り' : (e.score > 0 && e.score < 200) ? ' 🔴 Unfinished Business' : ''}`
+    : null;
   const fields = [
     ['SUMMARY', e.summary],
+    ['EMOTION', emotionText],
     ['INSIGHT', e.insight],
     ['KEYSTONE', e.keystone],
     ['TOP3 ACTUAL', e.top3_actual],
