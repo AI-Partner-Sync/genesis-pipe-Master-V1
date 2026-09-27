@@ -412,32 +412,35 @@ function dateInRange(dateStr, rangeStr) {
   return dateStr >= r.start && dateStr <= r.end;
 }
 
-// 期間の長さ（日数）。階層が近いほど短い → 複数階層がヒットした時に一番近い階層を選ぶための指標
-function rangeSpanDays(rangeStr) {
-  const r = parseDateRange(rangeStr);
-  if (!r) return 0;
-  const diff = (new Date(r.end) - new Date(r.start)) / 86400000;
-  return isNaN(diff) ? Infinity : diff;
-}
+// 階層の抽象度の並び（Monthlyの月初日がDailyの実在日付と偶然一致する、といった
+// 「下位階層への誤爆」を避けるため、期間の長さではなく階層の近さで優先順位をつける）
+const LEVEL_ORDER = { Daily: 0, Weekly: 1, Monthly: 2, Annual: 3 };
 
 // synapse_link が指す日付から、実際にリンクすべきノードを階層を問わず探す。
-// 優先順位: ①自階層での完全一致 → ②他階層でdate_rangeに含まれるもののうち最も期間が短い（=階層が近い）もの
+// 優先順位: ①自階層での完全一致 → ②他階層でdate_rangeに含まれるもののうち
+// 階層距離が最も近いもの（同距離なら下位より上位階層を優先。AIが月初日/年始日で
+// 上位階層を指した場合に、たまたま日付が一致した下位階層のDailyへ誤爆するのを防ぐ）
 function findLinkTargetId(e, linkedDate) {
   const selfId = nodeId(e.level, e.date);
+  const selfLevel = LEVEL_ORDER[e.level];
 
   const sameLevelId = nodeId(e.level, linkedDate);
   if (sameLevelId !== selfId && nodeIndex.has(sameLevelId)) return sameLevelId;
 
   let bestId = null;
-  let bestSpan = Infinity;
+  let bestDist = Infinity;
+  let bestIsHigher = false;
   nodeIndex.forEach((entry, id) => {
     if (id === selfId || entry.level === e.level) return;
     const matched = entry.date_range
       ? dateInRange(linkedDate, entry.date_range)
       : entry.date === linkedDate;
     if (!matched) return;
-    const span = entry.date_range ? rangeSpanDays(entry.date_range) : 0;
-    if (span < bestSpan) { bestSpan = span; bestId = id; }
+    const diff = LEVEL_ORDER[entry.level] - selfLevel;
+    const dist = Math.abs(diff);
+    const isHigher = diff > 0;
+    const better = dist < bestDist || (dist === bestDist && isHigher && !bestIsHigher);
+    if (better) { bestDist = dist; bestIsHigher = isHigher; bestId = id; }
   });
   return bestId;
 }
