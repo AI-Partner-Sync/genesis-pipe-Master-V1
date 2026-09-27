@@ -272,6 +272,51 @@ function extractLinkedDate(synapseLink) {
   return m ? m[1] : null;
 }
 
+// "YYYY-MM-DD ~ YYYY-MM-DD" を { start, end } に分解
+function parseDateRange(rangeStr) {
+  if (!rangeStr) return null;
+  const parts = String(rangeStr).split('~').map(s => s.trim());
+  if (parts.length !== 2 || !parts[0] || !parts[1]) return null;
+  return { start: parts[0], end: parts[1] };
+}
+
+// 指定日がその期間（date_range）に含まれるか（YYYY-MM-DD文字列は辞書式比較で日付比較できる）
+function dateInRange(dateStr, rangeStr) {
+  const r = parseDateRange(rangeStr);
+  if (!r) return false;
+  return dateStr >= r.start && dateStr <= r.end;
+}
+
+// 期間の長さ（日数）。階層が近いほど短い → 複数階層がヒットした時に一番近い階層を選ぶための指標
+function rangeSpanDays(rangeStr) {
+  const r = parseDateRange(rangeStr);
+  if (!r) return 0;
+  const diff = (new Date(r.end) - new Date(r.start)) / 86400000;
+  return isNaN(diff) ? Infinity : diff;
+}
+
+// synapse_link が指す日付から、実際にリンクすべきノードを階層を問わず探す。
+// 優先順位: ①自階層での完全一致 → ②他階層でdate_rangeに含まれるもののうち最も期間が短い（=階層が近い）もの
+function findLinkTargetId(e, linkedDate) {
+  const selfId = nodeId(e.level, e.date);
+
+  const sameLevelId = nodeId(e.level, linkedDate);
+  if (sameLevelId !== selfId && nodeIndex.has(sameLevelId)) return sameLevelId;
+
+  let bestId = null;
+  let bestSpan = Infinity;
+  nodeIndex.forEach((entry, id) => {
+    if (id === selfId || entry.level === e.level) return;
+    const matched = entry.date_range
+      ? dateInRange(linkedDate, entry.date_range)
+      : entry.date === linkedDate;
+    if (!matched) return;
+    const span = entry.date_range ? rangeSpanDays(entry.date_range) : 0;
+    if (span < bestSpan) { bestSpan = span; bestId = id; }
+  });
+  return bestId;
+}
+
 function buildGraph() {
   const entries = currentFilter === 'ALL'
     ? allEntries
@@ -302,23 +347,29 @@ function buildGraph() {
     };
   });
 
-  // synapse_link の日付を辿ってエッジを構築（同じ階層内で一致するノードのみ）
+  // synapse_link の日付を辿ってエッジを構築。
+  // 自階層内の伏線回収だけでなく、Weekly→Monthly→Annualのように階層をまたぐ
+  // 繋がりも findLinkTargetId で探す（階層をまたぐ場合は見た目を変えて区別する）。
   const edgeSet = new Set();
   const edges = [];
   entries.forEach(e => {
     const linkedDate = extractLinkedDate(e.synapse_link);
     if (!linkedDate) return;
     const fromId = nodeId(e.level, e.date);
-    const toId = nodeId(e.level, linkedDate);
-    if (toId === fromId || !nodeIndex.has(toId)) return;
+    const toId = findLinkTargetId(e, linkedDate);
+    if (!toId || toId === fromId || !nodeIndex.has(toId)) return;
     const key = [fromId, toId].sort().join('|');
     if (edgeSet.has(key)) return;
     edgeSet.add(key);
+    const crossLevel = nodeIndex.get(toId).level !== e.level;
     edges.push({
       from: fromId,
       to: toId,
-      color: { color: 'rgba(245,158,11,0.35)', highlight: '#f59e0b', hover: '#f59e0b' },
-      width: 1.3,
+      color: crossLevel
+        ? { color: 'rgba(245,158,11,0.55)', highlight: '#fbbf24', hover: '#fbbf24' }
+        : { color: 'rgba(245,158,11,0.35)', highlight: '#f59e0b', hover: '#f59e0b' },
+      width: crossLevel ? 2 : 1.3,
+      dashes: crossLevel ? [2, 3] : false,
       smooth: { type: 'continuous', roundness: 0.4 },
       arrows: { to: { enabled: true, scaleFactor: 0.35 } },
     });
