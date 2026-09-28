@@ -377,6 +377,9 @@ let nodeIndex = new Map();
 
 const LEVEL_COLOR = { Daily: '#94a3b8', Weekly: '#34d399', Monthly: '#38bdf8', Annual: '#a855f7' };
 const LEVEL_SIZE  = { Daily: 8, Weekly: 13, Monthly: 18, Annual: 24 };
+// Unfinished Businessの判定: 感情スコア181(Pessimism 悲観)以下。GAS側 I_MiniChapter.js の MC_UB_MAX_SCORE と揃えること。
+const UB_MAX_SCORE = 181;
+function isUnfinished(e) { return !!e && e.score > 0 && e.score <= UB_MAX_SCORE; }
 const FADE_COLOR  = { background: 'rgba(71,85,105,0.16)', border: 'rgba(71,85,105,0.16)', highlight: { background: 'rgba(71,85,105,0.3)', border: 'rgba(71,85,105,0.3)' } };
 
 function nodeId(level, date) { return level + '::' + date; }
@@ -404,7 +407,7 @@ function nodeStyleForMode(e) {
   }
 
   if (currentMode === 'unfinished') {
-    const hit = e.score > 0 && e.score < 200;
+    const hit = isUnfinished(e);
     return {
       size: hit ? baseSize * 1.5 : baseSize * 0.55,
       color: hit
@@ -453,7 +456,7 @@ function updateLegend() {
       <span class="legend-item"><span class="legend-dot" style="background:#fb923c"></span>200+</span>
       <span class="legend-item"><span class="legend-dot" style="background:#f87171"></span>200未満</span>`;
   } else if (currentMode === 'unfinished') {
-    legend.innerHTML = `<span class="legend-item"><span class="legend-dot" style="background:#f87171"></span>感情スコア200未満（Unfinished Business）だけを点灯。他は淡くフェード</span>`;
+    legend.innerHTML = `<span class="legend-item"><span class="legend-dot" style="background:#f87171"></span>感情スコア181以下（Unfinished Business）だけを点灯。他は淡くフェード</span>`;
   } else if (currentMode === 'enlightenment') {
     legend.innerHTML = `<span class="legend-item"><span class="legend-dot" style="background:#fef9c3"></span>感情スコア1000（悟り）だけを点灯。他は淡くフェード</span>`;
   } else {
@@ -644,7 +647,7 @@ function fmtLabel(e) {
 function showDetail(e) {
   if (!e) return;
   const emotionText = (e.emotion && e.score)
-    ? `${e.emotion}（Score: ${e.score}）${e.score >= 1000 ? ' ✨ 悟り' : (e.score > 0 && e.score < 200) ? ' 🔴 Unfinished Business' : ''}`
+    ? `${e.emotion}（Score: ${e.score}）${e.score >= 1000 ? ' ✨ 悟り' : isUnfinished(e) ? ' 🔴 Unfinished Business' : ''}`
     : null;
   const fields = [
     ['SUMMARY', e.summary],
@@ -701,7 +704,7 @@ let currentChapterEntry = null;
 // timeline_dataに載せて返すので、それがあればそのまま使う。
 // 旧バージョンのGAS(フィールド無し)の場合だけ、occurrence_count=0としてここで計算する。
 function computeHeaviness(e) {
-  if (!e || !e.score || e.score <= 0 || e.score >= 200) return null; // Unfinished Businessではない
+  if (!isUnfinished(e)) return null; // Unfinished Businessではない
   if (e.heaviness !== undefined) return e.heaviness;
   const depth = Math.min(Math.max(200 - e.score, 0), 200) / 200;
   const daysOpen = Math.max(0, (Date.now() - new Date(e.date).getTime()) / 86400000);
