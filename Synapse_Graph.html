@@ -281,6 +281,20 @@ header h1 { font-size: 16px; font-weight: 700; color: var(--gold); letter-spacin
 .chapter-chip.link { border-color: rgba(245,158,11,0.5); color: #fbbf24; background: none; cursor: pointer; font-family: inherit; }
 .chapter-chip.link:hover { background: rgba(245,158,11,0.12); }
 .chapter-invite { font-size: 12.5px; line-height: 1.75; color: #d8b4fe; background: rgba(168,85,247,0.08); border-radius: 10px; padding: 12px 14px; }
+.chapter-log { padding-bottom: 4px; }
+.chapter-ai-offer { margin-top: 8px; padding: 16px; border-radius: 12px; border: 1px dashed rgba(245,158,11,0.45); background: rgba(245,158,11,0.05); }
+.chapter-ai-offer-text { font-size: 12px; line-height: 1.7; color: #94a3b8; margin-bottom: 12px; }
+.chapter-btn.ai { width: 100%; background: rgba(245,158,11,0.12); border: 1px solid var(--gold); color: #fbbf24; }
+.chapter-btn.ai:hover { background: rgba(245,158,11,0.2); }
+.chapter-confirm { margin-top: 8px; padding: 16px; border-radius: 12px; border: 1px solid var(--gold); background: var(--navy-800); }
+.chapter-confirm-title { font-size: 14px; font-weight: 700; color: #fbbf24; margin-bottom: 8px; }
+.chapter-confirm-text { font-size: 12px; line-height: 1.75; color: #cbd5e1; margin-bottom: 14px; }
+.chapter-confirm-actions { display: flex; gap: 10px; }
+.chapter-confirm-actions .chapter-btn { flex: 1; }
+.chapter-btn:disabled { opacity: 0.5; pointer-events: none; }
+.chapter-ai-block { margin-top: 8px; padding-top: 16px; border-top: 1px solid var(--navy-700); }
+.chapter-ai-label { font-size: 10px; font-weight: 800; letter-spacing: 0.1em; color: #fbbf24; }
+.chapter-ai-block .chapter-meta { margin-bottom: 16px; }
 .chapter-cta { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--navy-700); }
 .chapter-btn {
   display: flex; align-items: center; justify-content: center; gap: 6px;
@@ -697,28 +711,23 @@ function computeHeaviness(e) {
 }
 
 // 意味編集エンジンのGAS側エンドポイント(page=mini_chapter)を呼ぶ。
-// 未実装のGASプロジェクトでは404/エラーになるため、その場合はフォールバック表示にする。
-async function fetchMiniChapter(e) {
+// generate=false: 保存済みの意味づけを読むだけ(Gemini課金なし)。無ければ { status:'not_generated' }。
+// generate=true : ユーザーが課金確認の上で「Go」を押した時だけ。Geminiで生成して保存する。
+// 通信エラーや旧バージョンのGAS(エンドポイント無し)の場合は null。
+async function fetchMiniChapter(e, generate) {
   try {
     const gasUrl = apsLoadSettings().gasUrl;
     if (!gasUrl) return null;
     const sep = gasUrl.includes('?') ? '&' : '?';
-    const res = await fetch(gasUrl + sep + `page=mini_chapter&level=${encodeURIComponent(e.level)}&date=${encodeURIComponent(e.date)}`);
+    const res = await fetch(gasUrl + sep + `page=mini_chapter&level=${encodeURIComponent(e.level)}&date=${encodeURIComponent(e.date)}${generate ? '&generate=1' : ''}`);
     if (!res.ok) return null;
     const data = await res.json();
-    return (data && data.status === 'success' && data.event) ? data : null;
+    if (data && data.status === 'success' && data.event) return data;
+    if (data && data.status === 'not_generated') return data;
+    return null;
   } catch (err) {
     return null;
   }
-}
-
-function fallbackChapter(e) {
-  return {
-    event: e.summary || e.insight || '(この記録にはまだ要約がありません)',
-    reframe: null,
-    learning: e.insight || null,
-    integration_action: e.actions || null,
-  };
 }
 
 function practiceKey(e) { return nodeId(e.level, e.date); }
@@ -738,87 +747,138 @@ function markPracticed(e) {
   } catch (err) { /* private mode等で保存できなくても致命的ではない */ }
 }
 
+// タップ時の流れ(課金はユーザーの明示操作の時だけ):
+//   ①記録のログをすぐ表示(課金なし)
+//   ②保存済みの意味づけがあれば読み込んで表示(シートを読むだけ・課金なし)
+//   ③無ければ「AIで意味を深掘りする」ボタン → 課金確認 → Goで初めてGeminiが動く
 async function openChapter(e) {
   if (!e) return;
   closeDetail();
   currentChapterEntry = e;
-  const overlay = document.getElementById('chapter-overlay');
-  const body = document.getElementById('chapter-body');
-
-  body.innerHTML = `
-    <div class="chapter-head">
-      <span class="badge ${e.level}">${e.level.toUpperCase()}</span>
-      <div class="chapter-date">${esc(e.date_range || e.date)}</div>
-    </div>
-    <div class="chapter-note">この出来事の意味を編んでいます…(初めて開く記録は20秒ほどかかります)</div>
-    <div class="chapter-section"><div class="chapter-section-label">出来事</div><div class="chapter-skel"></div><div class="chapter-skel" style="width:85%"></div></div>
-    <div class="chapter-section"><div class="chapter-section-label">意味の再定義</div><div class="chapter-skel"></div></div>
-    <div class="chapter-section"><div class="chapter-section-label">学び</div><div class="chapter-skel" style="width:60%"></div></div>
-    <div class="chapter-section"><div class="chapter-section-label">統合のための一歩</div><div class="chapter-skel" style="width:75%"></div></div>
-  `;
-  overlay.classList.add('open');
-
-  let heaviness = computeHeaviness(e);
-  let chapter = await fetchMiniChapter(e);
-  let usedFallback = false;
-  if (!chapter) { chapter = fallbackChapter(e); usedFallback = true; }
-  else if (chapter.heaviness !== undefined) heaviness = chapter.heaviness;
-
-  if (currentChapterEntry === e) renderChapterBody(e, chapter, heaviness, usedFallback);
-}
-
-function renderChapterBody(e, chapter, heaviness, usedFallback) {
-  const body = document.getElementById('chapter-body');
-  const section = (label, text) => text
-    ? `<div class="chapter-section"><div class="chapter-section-label">${label}</div><div class="chapter-section-text">${esc(text)}</div></div>`
-    : '';
-
-  const note = usedFallback
-    ? `<div class="chapter-note">AIによる意味づけ生成(意味編集エンジン)はまだこの記録には届いていません。既存の記録データを表示しています。</div>`
-    : '';
-
-  const practiced = isPracticed(e);
-  const inviteText = (chapter.cta && chapter.cta.type === 'session_invite') ? chapter.cta.text : '';
-  const ctaHtml = `
-    <div class="chapter-cta">
-      <button class="chapter-btn primary ${practiced ? 'done' : ''}" onclick="handlePractice(this)">
-        ${practiced ? '実践済み ✓' : '統合ワークを実践する'}
-      </button>
-      ${heaviness === 'heavy' ? `
-        ${inviteText ? `<div class="chapter-invite">${esc(inviteText)}</div>` : ''}
-        <a class="chapter-btn session" href="${SESSION_URL}" target="_blank" rel="noopener">${PARTNER_NAME}とセッションする</a>
-      ` : ''}
+  document.getElementById('chapter-body').innerHTML = `
+    ${chapterHeadHtml(e)}
+    ${chapterLogHtml(e)}
+    <div id="chapter-ai"><div class="chapter-note">保存済みの意味づけを確認しています…</div></div>
+    <div class="chapter-cta" style="border-top:none;margin-top:4px;padding-top:0">
       <button class="chapter-btn ghost" onclick="closeChapter(); showDetail(currentChapterEntry)">記録の詳細データを見る</button>
     </div>
   `;
+  document.getElementById('chapter-overlay').classList.add('open');
 
-  body.innerHTML = `
+  const data = await fetchMiniChapter(e, false);
+  if (currentChapterEntry !== e) return;
+  if (data && data.status === 'success') renderAiChapter(e, data);
+  else renderGenerateOffer(e, data);
+}
+
+function chapterHeadHtml(e) {
+  const heaviness = computeHeaviness(e);
+  const chips = [];
+  if (e.theme_id) chips.push(`<span class="chapter-chip ${heaviness === 'heavy' ? 'heavy' : ''}">${esc(e.theme_id)}${e.occurrence_count ? ` · ${e.occurrence_count}週で浮上` : ''}</span>`);
+  if (e.emotion) chips.push(`<span class="chapter-chip">${esc(e.emotion)}${e.score ? `(${e.score})` : ''}</span>`);
+  return `
     <div class="chapter-head">
       <span class="badge ${e.level}">${e.level.toUpperCase()}</span>
       <div class="chapter-date">${esc(e.date_range || e.date)}</div>
-      ${chapter.title ? `<div class="chapter-title">${esc(chapter.title)}</div>` : ''}
-      ${chapterMetaHtml(e, chapter, heaviness)}
-    </div>
-    ${note}
-    ${section('出来事', chapter.event)}
-    ${section('意味の再定義', chapter.reframe)}
-    ${section('学び', chapter.learning)}
-    ${section('統合のための一歩', chapter.integration_action)}
-    ${ctaHtml}
-  `;
+      ${chips.length ? `<div class="chapter-meta">${chips.join('')}</div>` : ''}
+    </div>`;
 }
 
-// テーマ・再燃回数・回収先のチップ。回収先チップをタップするとその記録のチャプターへ移る。
-function chapterMetaHtml(e, chapter, heaviness) {
-  const theme = chapter.theme_id || e.theme_id;
-  const occ = chapter.occurrence_count !== undefined ? chapter.occurrence_count : e.occurrence_count;
-  const chips = [];
-  if (theme) chips.push(`<span class="chapter-chip ${heaviness === 'heavy' ? 'heavy' : ''}">${esc(theme)}${occ ? ` · ${occ}週で浮上` : ''}</span>`);
-  const r = chapter.resolved;
-  if (r && nodeIndex.has(nodeId(r.level, r.date))) {
-    chips.push(`<button class="chapter-chip link" onclick="jumpToChapter('${esc(r.level)}','${esc(r.date)}')">→ 回収先 ${esc(r.date_range || r.date)}</button>`);
+// 課金なしで出せる「記録そのもの」
+function chapterLogHtml(e) {
+  const section = (label, text) => text
+    ? `<div class="chapter-section"><div class="chapter-section-label">${label}</div><div class="chapter-section-text">${esc(text)}</div></div>`
+    : '';
+  const body = [
+    section('記録', e.summary || '(この記録にはまだ要約がありません)'),
+    section('KEYSTONE', e.keystone),
+    section('INSIGHT', e.insight),
+    section('伏線回収', e.synapse_link),
+  ].join('');
+  return `<div class="chapter-log">${body}</div>`;
+}
+
+function renderGenerateOffer(e, data) {
+  const box = document.getElementById('chapter-ai');
+  if (!box) return;
+  if (!data) {
+    box.innerHTML = `<div class="chapter-note">AIによる意味づけ(意味編集エンジン)に接続できませんでした。記録のみ表示しています。</div>`;
+    return;
   }
-  return chips.length ? `<div class="chapter-meta">${chips.join('')}</div>` : '';
+  box.innerHTML = `
+    <div class="chapter-ai-offer">
+      <div class="chapter-ai-offer-text">この出来事が、その後の何につながっていたのか。AIが4つの視点(出来事・意味の再定義・学び・統合の一歩)で物語にします。</div>
+      <button class="chapter-btn ai" onclick="showGenerateConfirm()">✨ AIで意味を深掘りする</button>
+    </div>`;
+}
+
+function showGenerateConfirm() {
+  const box = document.getElementById('chapter-ai');
+  if (!box) return;
+  box.innerHTML = `
+    <div class="chapter-confirm" role="alertdialog" aria-label="API利用料の確認">
+      <div class="chapter-confirm-title">API利用料がかかります</div>
+      <div class="chapter-confirm-text">
+        生成にはGoogleのGemini APIを使います。GASに設定したAPIキーに、1回あたり約1円(目安)の利用料が発生します。<br>
+        生成した文章は保存され、次回からは無料で表示されます。生成には20秒ほどかかります。
+      </div>
+      <div class="chapter-confirm-actions">
+        <button class="chapter-btn ghost" onclick="renderGenerateOffer(currentChapterEntry, {status:'not_generated'})">やめる</button>
+        <button class="chapter-btn primary" onclick="runGenerate(this)">Go</button>
+      </div>
+    </div>`;
+}
+
+async function runGenerate(btn) {
+  const e = currentChapterEntry;
+  if (!e) return;
+  if (btn) btn.disabled = true; // 二重押しで2回課金されないように
+  document.getElementById('chapter-ai').innerHTML = `
+    <div class="chapter-note">この出来事の意味を編んでいます…(20秒ほどかかります)</div>
+    <div class="chapter-section"><div class="chapter-section-label">出来事</div><div class="chapter-skel"></div><div class="chapter-skel" style="width:85%"></div></div>
+    <div class="chapter-section"><div class="chapter-section-label">意味の再定義</div><div class="chapter-skel"></div></div>
+    <div class="chapter-section"><div class="chapter-section-label">学び</div><div class="chapter-skel" style="width:60%"></div></div>
+    <div class="chapter-section"><div class="chapter-section-label">統合のための一歩</div><div class="chapter-skel" style="width:75%"></div></div>`;
+  const data = await fetchMiniChapter(e, true);
+  if (currentChapterEntry !== e) return;
+  if (data && data.status === 'success') renderAiChapter(e, data);
+  else document.getElementById('chapter-ai').innerHTML =
+    `<div class="chapter-note">生成に失敗しました。時間をおいてもう一度お試しください。</div>`;
+}
+
+function renderAiChapter(e, chapter) {
+  const box = document.getElementById('chapter-ai');
+  if (!box) return;
+  const heaviness = chapter.heaviness !== undefined ? chapter.heaviness : computeHeaviness(e);
+  const section = (label, text) => text
+    ? `<div class="chapter-section"><div class="chapter-section-label">${label}</div><div class="chapter-section-text">${esc(text)}</div></div>`
+    : '';
+  const practiced = isPracticed(e);
+  const inviteText = (chapter.cta && chapter.cta.type === 'session_invite') ? chapter.cta.text : '';
+  const r = chapter.resolved;
+  const resolvedChip = (r && nodeIndex.has(nodeId(r.level, r.date)))
+    ? `<div class="chapter-meta"><button class="chapter-chip link" onclick="jumpToChapter('${esc(r.level)}','${esc(r.date)}')">→ 回収先 ${esc(r.date_range || r.date)}</button></div>`
+    : '';
+
+  box.innerHTML = `
+    <div class="chapter-ai-block">
+      <div class="chapter-ai-label">✨ AIによる意味づけ</div>
+      ${chapter.title ? `<div class="chapter-title">${esc(chapter.title)}</div>` : ''}
+      ${resolvedChip}
+      ${section('出来事', chapter.event)}
+      ${section('意味の再定義', chapter.reframe)}
+      ${section('学び', chapter.learning)}
+      ${section('統合のための一歩', chapter.integration_action)}
+      <div class="chapter-cta">
+        <button class="chapter-btn primary ${practiced ? 'done' : ''}" onclick="handlePractice(this)">
+          ${practiced ? '実践済み ✓' : '統合ワークを実践する'}
+        </button>
+        ${heaviness === 'heavy' ? `
+          ${inviteText ? `<div class="chapter-invite">${esc(inviteText)}</div>` : ''}
+          <a class="chapter-btn session" href="${SESSION_URL}" target="_blank" rel="noopener">${PARTNER_NAME}とセッションする</a>
+        ` : ''}
+      </div>
+    </div>`;
 }
 
 function jumpToChapter(level, date) {
