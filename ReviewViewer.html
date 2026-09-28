@@ -444,9 +444,13 @@ async function loadFile(type) {
       method: 'POST',
       redirect: 'follow',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ type: 'vault_file', suffix: type })
+      body: apsGasPostBody({ type: 'vault_file', suffix: type })
     });
     const data = await res.json();
+    if (apsIsUnauthorized(data)) {
+      content.innerHTML = `<div class="empty">${esc(APS_UNAUTHORIZED_MESSAGE)}</div>`;
+      return;
+    }
     if (!data || data.status !== 'success') {
       const label = type === 'WeeklyReview' ? 'Weekly Review' : 'AAR';
       content.innerHTML = `<div class="empty">まだ${label}ファイルが見つかりません。<br>
