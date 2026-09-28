@@ -212,6 +212,85 @@ header h1 { font-size: 16px; font-weight: 700; color: var(--gold); letter-spacin
   color: #475569;
   line-height: 1.6;
 }
+
+/* ミニチャプター(意味編集エンジン)モーダル — ボトムシート */
+.chapter-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(2,8,23,0.6);
+  backdrop-filter: blur(4px);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+.chapter-overlay.open { opacity: 1; visibility: visible; pointer-events: auto; }
+.chapter-sheet {
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+  max-height: 86vh;
+  background: var(--navy-900);
+  border: 1px solid var(--navy-700);
+  border-bottom: none;
+  border-radius: 20px 20px 0 0;
+  box-shadow: 0 -12px 40px rgba(0,0,0,0.5);
+  padding: 8px 20px calc(20px + env(safe-area-inset-bottom, 0px));
+  overflow-y: auto;
+  transform: translateY(100%);
+  transition: transform 0.32s cubic-bezier(.22,.68,0,1.01);
+}
+.chapter-overlay.open .chapter-sheet { transform: translateY(0); }
+.chapter-handle { width: 36px; height: 4px; border-radius: 2px; background: var(--navy-700); margin: 6px auto 10px; }
+.chapter-close {
+  position: absolute;
+  top: 10px; right: 16px;
+  background: none; border: none;
+  color: #475569;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  min-width: 44px; min-height: 44px;
+}
+.chapter-close:hover { color: var(--gold); }
+.chapter-head { margin-bottom: 16px; }
+.chapter-date { font-size: 12px; color: #64748b; margin-top: 6px; }
+.chapter-section { margin-bottom: 16px; }
+.chapter-section-label {
+  font-size: 9px; font-weight: 800; letter-spacing: 0.1em;
+  color: var(--gold); margin-bottom: 5px;
+}
+.chapter-section-text { font-size: 13.5px; line-height: 1.75; color: #cbd5e1; white-space: pre-wrap; }
+.chapter-skel {
+  height: 13px; border-radius: 4px;
+  background: linear-gradient(90deg, var(--navy-800) 25%, var(--navy-700) 37%, var(--navy-800) 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease infinite;
+  margin-bottom: 8px;
+}
+@keyframes shimmer { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
+.chapter-note { font-size: 10.5px; color: #475569; margin-bottom: 16px; line-height: 1.6; }
+.chapter-cta { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--navy-700); }
+.chapter-btn {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 46px;
+  border-radius: 12px;
+  font-size: 13.5px; font-weight: 700;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.15s;
+}
+.chapter-btn.primary { background: var(--gold); border: none; color: var(--navy-950); }
+.chapter-btn.primary:hover { filter: brightness(1.08); }
+.chapter-btn.primary.done { background: var(--navy-700); color: #94a3b8; }
+.chapter-btn.session { background: rgba(168,85,247,0.14); border: 1px solid #a855f7; color: #d8b4fe; }
+.chapter-btn.session:hover { background: rgba(168,85,247,0.22); }
+.chapter-btn.ghost { background: none; border: none; color: #475569; font-weight: 600; font-size: 11.5px; min-height: 36px; padding: 6px; }
+.chapter-btn.ghost:hover { color: var(--gold); }
 </style>
 </head>
 <body>
@@ -258,6 +337,13 @@ header h1 { font-size: 16px; font-weight: 700; color: var(--gold); letter-spacin
   <div class="detail-panel" id="detail-panel">
     <button class="detail-close" onclick="closeDetail()">&times;</button>
     <div id="detail-body"></div>
+  </div>
+  <div class="chapter-overlay" id="chapter-overlay" onclick="if(event.target===this) closeChapter()">
+    <div class="chapter-sheet" id="chapter-sheet" role="dialog" aria-modal="true" aria-label="意味づけチャプター">
+      <div class="chapter-handle"></div>
+      <button class="chapter-close" onclick="closeChapter()" aria-label="閉じる">&times;</button>
+      <div id="chapter-body"></div>
+    </div>
   </div>
 </div>
 
@@ -521,9 +607,9 @@ function buildGraph() {
   network.once('stabilizationIterationsDone', () => network.fit({ animation: { duration: 400 } }));
   network.on('click', params => {
     if (params.nodes.length) {
-      showDetail(nodeIndex.get(params.nodes[0]));
+      openChapter(nodeIndex.get(params.nodes[0]));
     } else {
-      closeDetail();
+      closeChapter();
     }
   });
 }
@@ -582,6 +668,144 @@ function esc(str) {
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 }
+
+// ===== ②意味編集エンジン: ミニチャプター・モーダル =====
+const PARTNER_NAME = '菅ちゃん';
+const SESSION_URL = 'https://rikkis-room.com/ja/briefing';
+const PRACTICE_LOG_KEY = 'aps_chapter_practice_log';
+let currentChapterEntry = null;
+
+// heaviness算出(設計スペック「heaviness算出式」準拠)。
+// occurrence_countはOracleエンジンにtheme_idを追加するまで未実装のため0固定。
+function computeHeaviness(e) {
+  if (!e || !e.score || e.score <= 0 || e.score >= 200) return null; // Unfinished Businessではない
+  const depth = Math.min(Math.max(200 - e.score, 0), 200) / 200;
+  const daysOpen = Math.max(0, (Date.now() - new Date(e.date).getTime()) / 86400000);
+  const dwell = 1 - Math.exp(-daysOpen / 90);
+  const raw = 0.30 * depth + 0.25 * dwell + 0.45 * 0;
+  return raw >= 0.66 ? 'heavy' : raw >= 0.33 ? 'medium' : 'light';
+}
+
+// 意味編集エンジンのGAS側エンドポイント(page=mini_chapter)を呼ぶ。
+// 未実装のGASプロジェクトでは404/エラーになるため、その場合はフォールバック表示にする。
+async function fetchMiniChapter(e) {
+  try {
+    const gasUrl = apsLoadSettings().gasUrl;
+    if (!gasUrl) return null;
+    const sep = gasUrl.includes('?') ? '&' : '?';
+    const res = await fetch(gasUrl + sep + `page=mini_chapter&level=${encodeURIComponent(e.level)}&date=${encodeURIComponent(e.date)}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return (data && data.event) ? data : null;
+  } catch (err) {
+    return null;
+  }
+}
+
+function fallbackChapter(e) {
+  return {
+    event: e.summary || e.insight || '(この記録にはまだ要約がありません)',
+    reframe: null,
+    learning: e.insight || null,
+    integration_action: e.actions || null,
+  };
+}
+
+function practiceKey(e) { return nodeId(e.level, e.date); }
+
+function isPracticed(e) {
+  try {
+    const log = JSON.parse(localStorage.getItem(PRACTICE_LOG_KEY) || '{}');
+    return !!log[practiceKey(e)];
+  } catch (err) { return false; }
+}
+
+function markPracticed(e) {
+  try {
+    const log = JSON.parse(localStorage.getItem(PRACTICE_LOG_KEY) || '{}');
+    log[practiceKey(e)] = new Date().toISOString();
+    localStorage.setItem(PRACTICE_LOG_KEY, JSON.stringify(log));
+  } catch (err) { /* private mode等で保存できなくても致命的ではない */ }
+}
+
+async function openChapter(e) {
+  if (!e) return;
+  closeDetail();
+  currentChapterEntry = e;
+  const overlay = document.getElementById('chapter-overlay');
+  const body = document.getElementById('chapter-body');
+
+  body.innerHTML = `
+    <div class="chapter-head">
+      <span class="badge ${e.level}">${e.level.toUpperCase()}</span>
+      <div class="chapter-date">${esc(e.date_range || e.date)}</div>
+    </div>
+    <div class="chapter-section"><div class="chapter-section-label">出来事</div><div class="chapter-skel"></div><div class="chapter-skel" style="width:85%"></div></div>
+    <div class="chapter-section"><div class="chapter-section-label">意味の再定義</div><div class="chapter-skel"></div></div>
+    <div class="chapter-section"><div class="chapter-section-label">学び</div><div class="chapter-skel" style="width:60%"></div></div>
+    <div class="chapter-section"><div class="chapter-section-label">統合のための一歩</div><div class="chapter-skel" style="width:75%"></div></div>
+  `;
+  overlay.classList.add('open');
+
+  const heaviness = computeHeaviness(e);
+  let chapter = await fetchMiniChapter(e);
+  let usedFallback = false;
+  if (!chapter) { chapter = fallbackChapter(e); usedFallback = true; }
+
+  if (currentChapterEntry === e) renderChapterBody(e, chapter, heaviness, usedFallback);
+}
+
+function renderChapterBody(e, chapter, heaviness, usedFallback) {
+  const body = document.getElementById('chapter-body');
+  const section = (label, text) => text
+    ? `<div class="chapter-section"><div class="chapter-section-label">${label}</div><div class="chapter-section-text">${esc(text)}</div></div>`
+    : '';
+
+  const note = usedFallback
+    ? `<div class="chapter-note">AIによる意味づけ生成(意味編集エンジン)はまだこの記録には届いていません。既存の記録データを表示しています。</div>`
+    : '';
+
+  const practiced = isPracticed(e);
+  const ctaHtml = `
+    <div class="chapter-cta">
+      <button class="chapter-btn primary ${practiced ? 'done' : ''}" onclick="handlePractice(this)">
+        ${practiced ? '実践済み ✓' : '統合ワークを実践する'}
+      </button>
+      ${heaviness === 'heavy' ? `
+        <a class="chapter-btn session" href="${SESSION_URL}" target="_blank" rel="noopener">${PARTNER_NAME}とセッションする</a>
+      ` : ''}
+      <button class="chapter-btn ghost" onclick="closeChapter(); showDetail(currentChapterEntry)">記録の詳細データを見る</button>
+    </div>
+  `;
+
+  body.innerHTML = `
+    <div class="chapter-head">
+      <span class="badge ${e.level}">${e.level.toUpperCase()}</span>
+      <div class="chapter-date">${esc(e.date_range || e.date)}</div>
+    </div>
+    ${note}
+    ${section('出来事', chapter.event)}
+    ${section('意味の再定義', chapter.reframe)}
+    ${section('学び', chapter.learning)}
+    ${section('統合のための一歩', chapter.integration_action)}
+    ${ctaHtml}
+  `;
+}
+
+function handlePractice(btn) {
+  if (!currentChapterEntry) return;
+  markPracticed(currentChapterEntry);
+  btn.textContent = '実践済み ✓';
+  btn.classList.add('done');
+}
+
+function closeChapter() {
+  document.getElementById('chapter-overlay').classList.remove('open');
+}
+
+document.addEventListener('keydown', ev => {
+  if (ev.key === 'Escape') { closeChapter(); closeDetail(); }
+});
 
 window.onload = loadData;
 </script>
