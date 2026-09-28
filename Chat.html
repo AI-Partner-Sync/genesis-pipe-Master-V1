@@ -776,7 +776,8 @@ function saveConversationLog() {
     method: 'POST',
     redirect: 'follow',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ type: 'save', fullText: snapshot })
+    // aiName: GAS側でAIの発言を1行要約に圧縮して保存するために話者を特定する
+    body: JSON.stringify({ type: 'save', fullText: snapshot, aiName: s.aiName })
   })
     .then(r => r.json())
     .then(data => {
