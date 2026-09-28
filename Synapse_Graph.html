@@ -120,7 +120,7 @@ header h1 { font-size: 16px; font-weight: 700; color: var(--gold); letter-spacin
 }
 .mode-btn:hover { border-color: var(--gold); color: var(--gold); }
 .mode-btn.active { background: var(--navy-700); border-color: #94a3b8; color: #e2e8f0; }
-.mode-btn.unfinished.active { background: rgba(248,113,113,0.15); border-color: #f87171; color: #f87171; }
+.mode-btn.unfinished.active { background: rgba(244,63,94,0.15); border-color: #f43f5e; color: #f43f5e; }
 .mode-btn.enlightenment.active { background: rgba(254,249,195,0.14); border-color: #fbbf24; color: #fbbf24; }
 .mode-btn.emotion.active { background: rgba(245,158,11,0.15); border-color: var(--gold); color: var(--gold); }
 
@@ -385,10 +385,11 @@ const FADE_COLOR  = { background: 'rgba(71,85,105,0.16)', border: 'rgba(71,85,10
 function nodeId(level, date) { return level + '::' + date; }
 
 // Timeline Viewer（感情スコアの折れ線グラフ）と同じ配色基準。
-// 1000=悟りの黄金、500+=橙金、350+=緑、200+=橙、200未満=赤（未解決の課題）
+// 1000=悟りのクリーム、500+=紫、350+=緑、200+=水色、200未満=赤（未解決の課題）。
+// 隣り合う区分を色相で見分けられるよう、橙系を使わない配色（2026-09-29改訂）。
 function scoreToColor(s) {
   if (!s || s <= 0) return '#475569';
-  return s >= 1000 ? '#fef9c3' : s >= 500 ? '#f59e0b' : s >= 350 ? '#34d399' : s >= 200 ? '#fb923c' : '#f87171';
+  return s >= 1000 ? '#fef9c3' : s >= 500 ? '#c084fc' : s >= 350 ? '#34d399' : s >= 200 ? '#38bdf8' : '#f43f5e';
 }
 
 // 現在の表示モードに応じて、1ノード分の見た目（サイズ・色・後光）を決める
@@ -411,9 +412,9 @@ function nodeStyleForMode(e) {
     return {
       size: hit ? baseSize * 1.5 : baseSize * 0.55,
       color: hit
-        ? { background: '#f87171', border: '#fecaca', highlight: { background: '#fecaca', border: '#f87171' } }
+        ? { background: '#f43f5e', border: '#fecdd3', highlight: { background: '#fecdd3', border: '#f43f5e' } }
         : FADE_COLOR,
-      shadow: hit ? { enabled: true, color: 'rgba(248,113,113,0.85)', size: 20, x: 0, y: 0 } : { enabled: false },
+      shadow: hit ? { enabled: true, color: 'rgba(244,63,94,0.85)', size: 20, x: 0, y: 0 } : { enabled: false },
     };
   }
 
@@ -451,12 +452,12 @@ function updateLegend() {
   if (currentMode === 'emotion') {
     legend.innerHTML = `
       <span class="legend-item"><span class="legend-dot" style="background:#fef9c3"></span>1000 悟り</span>
-      <span class="legend-item"><span class="legend-dot" style="background:#f59e0b"></span>500+</span>
+      <span class="legend-item"><span class="legend-dot" style="background:#c084fc"></span>500+</span>
       <span class="legend-item"><span class="legend-dot" style="background:#34d399"></span>350+</span>
-      <span class="legend-item"><span class="legend-dot" style="background:#fb923c"></span>200+</span>
-      <span class="legend-item"><span class="legend-dot" style="background:#f87171"></span>200未満</span>`;
+      <span class="legend-item"><span class="legend-dot" style="background:#38bdf8"></span>200+</span>
+      <span class="legend-item"><span class="legend-dot" style="background:#f43f5e"></span>200未満</span>`;
   } else if (currentMode === 'unfinished') {
-    legend.innerHTML = `<span class="legend-item"><span class="legend-dot" style="background:#f87171"></span>感情スコア181以下（Unfinished Business）だけを点灯。他は淡くフェード</span>`;
+    legend.innerHTML = `<span class="legend-item"><span class="legend-dot" style="background:#f43f5e"></span>感情スコア181以下（Unfinished Business）だけを点灯。他は淡くフェード</span>`;
   } else if (currentMode === 'enlightenment') {
     legend.innerHTML = `<span class="legend-item"><span class="legend-dot" style="background:#fef9c3"></span>感情スコア1000（悟り）だけを点灯。他は淡くフェード</span>`;
   } else {

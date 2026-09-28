@@ -194,10 +194,10 @@ header h1 { font-size: 16px; font-weight: 700; color: var(--gold); letter-spacin
   font-weight: 600;
   white-space: nowrap;
 }
-.eg  { background: rgba(245,158,11,0.15); color: #f59e0b; }
+.eg  { background: rgba(192,132,252,0.15); color: #c084fc; }
 .eg2 { background: rgba(52,211,153,0.15); color: #34d399; }
-.eg3 { background: rgba(251,146,60,0.15); color: #fb923c; }
-.eg4 { background: rgba(248,113,113,0.15);color: #f87171; }
+.eg3 { background: rgba(56,189,248,0.15); color: #38bdf8; }
+.eg4 { background: rgba(244,63,94,0.15); color: #f43f5e; }
 
 .summary {
   font-size: 13px;
@@ -429,7 +429,7 @@ function buildChart(levelEntries, level = 'Daily') {
   const labels = sorted.map(e => labelFmt(e.date));
   const scores = sorted.map(e => e.score || 0);
   const pointColors = scores.map(s =>
-    s >= 1000 ? '#fef9c3' : s >= 500 ? '#f59e0b' : s >= 350 ? '#34d399' : s >= 200 ? '#fb923c' : '#f87171'
+    s >= 1000 ? '#fef9c3' : s >= 500 ? '#c084fc' : s >= 350 ? '#34d399' : s >= 200 ? '#38bdf8' : '#f43f5e'
   );
 
   // score=1000の点だけゴールドのスパークル（後光＋放射スパイク＋輝く核）を重ね描きするプラグイン
