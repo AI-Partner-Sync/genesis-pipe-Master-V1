@@ -11,7 +11,7 @@ Google Apps Script（GAS）+ Gemini APIで動くAI伴走者チャット＆振り
 - `Timeline_Viewer.html` — 感情スコアの時系列グラフ
 - `Synapse_Graph.html` — 階層をまたぐ伏線（synapse_link）のネットワーク可視化
 
-いずれも `settings.js` 経由でユーザーのGAS Web AppのURLを読み、そこにデータを取りに行く。GASのサーバー側コード（`Code.gs`）はこのリポジトリには含まれない（README参照、GASエディタに手動で貼り付ける運用）。
+いずれも `settings.js` 経由でユーザーのGAS Web AppのURLを読み、そこにデータを取りに行く。GASのサーバー側コードはこのリポジトリには含まれない。Rikki本人のバックエンドは AI_Partner_Sync_OS の `1_System_Core/gas_src/ai_partner_sync_engine/`（clasp管理・`clasp push` → `clasp deploy -i <既存ID>` で本番URLを変えずに反映）で、`G_Timeline.js` の `doGet` が `?page=timeline_data` 等を返している。公開用フォーク `ai_partner_sync_master_sheet_public/` の `G_Timeline.js` は別物なので注意。
 
 ## 進行中の設計: 「想起エンジン」「意味編集エンジン」
 
@@ -27,6 +27,7 @@ Google Apps Script（GAS）+ Gemini APIで動くAI伴走者チャット＆振り
 **PR #1**: https://github.com/AI-Partner-Sync/genesis-pipe-Master-V1/pull/1
 
 実装済みの範囲: ノードタップで開くボトムシート型モーダル、4部構成表示、heavinessに応じたCTA出し分け、localStorageによる実践ログ。
-未実装（次にやること）: GASバックエンド側の `page=mini_chapter` エンドポイント（②のプロンプトをGeminiに投げて実際に生成する部分）、Oracleエンジンへの `theme_id` タグ付け追加（`occurrence_count` の実装に必要）。
+2026-09-28 追加実装（本家GASのみ）: `I_MiniChapter.js` に `?page=mini_chapter`（生成＋`MiniChapter`シートへのキャッシュ）、`?page=assign_themes`（Unfinished Businessへ`theme_id`付与→`Theme_Index`シート）、`?page=prewarm_chapters` を追加。`timeline_data` の各エントリに `theme_id` / `occurrence_count`（同テーマが現れた週数）/ `days_open` / `heaviness` が載るようになり、フロントはそれを優先して使う。
+未実装: 公開用フォークへの移植、①想起エンジン（Chat.html側）。
 
 新しいセッションでこの続きに取り組む場合は、まず上記スペックドキュメントとPRを読むこと。

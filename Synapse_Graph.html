@@ -274,6 +274,13 @@ header h1 { font-size: 16px; font-weight: 700; color: var(--gold); letter-spacin
 }
 @keyframes shimmer { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
 .chapter-note { font-size: 10.5px; color: #475569; margin-bottom: 16px; line-height: 1.6; }
+.chapter-title { font-size: 17px; font-weight: 700; color: #f8fafc; margin-top: 10px; line-height: 1.5; }
+.chapter-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.chapter-chip { font-size: 10.5px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--navy-700); color: #94a3b8; }
+.chapter-chip.heavy { border-color: #a855f7; color: #d8b4fe; }
+.chapter-chip.link { border-color: rgba(245,158,11,0.5); color: #fbbf24; background: none; cursor: pointer; font-family: inherit; }
+.chapter-chip.link:hover { background: rgba(245,158,11,0.12); }
+.chapter-invite { font-size: 12.5px; line-height: 1.75; color: #d8b4fe; background: rgba(168,85,247,0.08); border-radius: 10px; padding: 12px 14px; }
 .chapter-cta { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--navy-700); }
 .chapter-btn {
   display: flex; align-items: center; justify-content: center; gap: 6px;
@@ -676,9 +683,12 @@ const PRACTICE_LOG_KEY = 'aps_chapter_practice_log';
 let currentChapterEntry = null;
 
 // heaviness算出(設計スペック「heaviness算出式」準拠)。
-// occurrence_countはOracleエンジンにtheme_idを追加するまで未実装のため0固定。
+// GAS(I_MiniChapter.js)がtheme_idから求めたoccurrence_count/days_open/heavinessを
+// timeline_dataに載せて返すので、それがあればそのまま使う。
+// 旧バージョンのGAS(フィールド無し)の場合だけ、occurrence_count=0としてここで計算する。
 function computeHeaviness(e) {
   if (!e || !e.score || e.score <= 0 || e.score >= 200) return null; // Unfinished Businessではない
+  if (e.heaviness !== undefined) return e.heaviness;
   const depth = Math.min(Math.max(200 - e.score, 0), 200) / 200;
   const daysOpen = Math.max(0, (Date.now() - new Date(e.date).getTime()) / 86400000);
   const dwell = 1 - Math.exp(-daysOpen / 90);
@@ -696,7 +706,7 @@ async function fetchMiniChapter(e) {
     const res = await fetch(gasUrl + sep + `page=mini_chapter&level=${encodeURIComponent(e.level)}&date=${encodeURIComponent(e.date)}`);
     if (!res.ok) return null;
     const data = await res.json();
-    return (data && data.event) ? data : null;
+    return (data && data.status === 'success' && data.event) ? data : null;
   } catch (err) {
     return null;
   }
@@ -740,6 +750,7 @@ async function openChapter(e) {
       <span class="badge ${e.level}">${e.level.toUpperCase()}</span>
       <div class="chapter-date">${esc(e.date_range || e.date)}</div>
     </div>
+    <div class="chapter-note">この出来事の意味を編んでいます…(初めて開く記録は20秒ほどかかります)</div>
     <div class="chapter-section"><div class="chapter-section-label">出来事</div><div class="chapter-skel"></div><div class="chapter-skel" style="width:85%"></div></div>
     <div class="chapter-section"><div class="chapter-section-label">意味の再定義</div><div class="chapter-skel"></div></div>
     <div class="chapter-section"><div class="chapter-section-label">学び</div><div class="chapter-skel" style="width:60%"></div></div>
@@ -747,10 +758,11 @@ async function openChapter(e) {
   `;
   overlay.classList.add('open');
 
-  const heaviness = computeHeaviness(e);
+  let heaviness = computeHeaviness(e);
   let chapter = await fetchMiniChapter(e);
   let usedFallback = false;
   if (!chapter) { chapter = fallbackChapter(e); usedFallback = true; }
+  else if (chapter.heaviness !== undefined) heaviness = chapter.heaviness;
 
   if (currentChapterEntry === e) renderChapterBody(e, chapter, heaviness, usedFallback);
 }
@@ -766,12 +778,14 @@ function renderChapterBody(e, chapter, heaviness, usedFallback) {
     : '';
 
   const practiced = isPracticed(e);
+  const inviteText = (chapter.cta && chapter.cta.type === 'session_invite') ? chapter.cta.text : '';
   const ctaHtml = `
     <div class="chapter-cta">
       <button class="chapter-btn primary ${practiced ? 'done' : ''}" onclick="handlePractice(this)">
         ${practiced ? '実践済み ✓' : '統合ワークを実践する'}
       </button>
       ${heaviness === 'heavy' ? `
+        ${inviteText ? `<div class="chapter-invite">${esc(inviteText)}</div>` : ''}
         <a class="chapter-btn session" href="${SESSION_URL}" target="_blank" rel="noopener">${PARTNER_NAME}とセッションする</a>
       ` : ''}
       <button class="chapter-btn ghost" onclick="closeChapter(); showDetail(currentChapterEntry)">記録の詳細データを見る</button>
@@ -782,6 +796,8 @@ function renderChapterBody(e, chapter, heaviness, usedFallback) {
     <div class="chapter-head">
       <span class="badge ${e.level}">${e.level.toUpperCase()}</span>
       <div class="chapter-date">${esc(e.date_range || e.date)}</div>
+      ${chapter.title ? `<div class="chapter-title">${esc(chapter.title)}</div>` : ''}
+      ${chapterMetaHtml(e, chapter, heaviness)}
     </div>
     ${note}
     ${section('出来事', chapter.event)}
@@ -790,6 +806,27 @@ function renderChapterBody(e, chapter, heaviness, usedFallback) {
     ${section('統合のための一歩', chapter.integration_action)}
     ${ctaHtml}
   `;
+}
+
+// テーマ・再燃回数・回収先のチップ。回収先チップをタップするとその記録のチャプターへ移る。
+function chapterMetaHtml(e, chapter, heaviness) {
+  const theme = chapter.theme_id || e.theme_id;
+  const occ = chapter.occurrence_count !== undefined ? chapter.occurrence_count : e.occurrence_count;
+  const chips = [];
+  if (theme) chips.push(`<span class="chapter-chip ${heaviness === 'heavy' ? 'heavy' : ''}">${esc(theme)}${occ ? ` · ${occ}週で浮上` : ''}</span>`);
+  const r = chapter.resolved;
+  if (r && nodeIndex.has(nodeId(r.level, r.date))) {
+    chips.push(`<button class="chapter-chip link" onclick="jumpToChapter('${esc(r.level)}','${esc(r.date)}')">→ 回収先 ${esc(r.date_range || r.date)}</button>`);
+  }
+  return chips.length ? `<div class="chapter-meta">${chips.join('')}</div>` : '';
+}
+
+function jumpToChapter(level, date) {
+  const id = nodeId(level, date);
+  const entry = nodeIndex.get(id);
+  if (!entry) return;
+  if (network) { network.selectNodes([id]); network.focus(id, { scale: 1.2, animation: { duration: 500 } }); }
+  openChapter(entry);
 }
 
 function handlePractice(btn) {
