@@ -655,6 +655,8 @@ footer {
 })();
 
 let conversationHistory = '';
+// 想起エンジン: この会話で過去の1件をすでに差し出したか（1会話につき1件まで。会話保存でリセット）
+let recallUsed = false;
 let currentAudio = null;
 
 /* ══════════════════════════════════════════
@@ -782,6 +784,7 @@ function saveConversationLog() {
         addBubble('スプレッドシートに記録完了。', 'system');
         if (data.oracle) addBubble(data.oracle, 'titan');
         conversationHistory = '';
+        recallUsed = false;
       } else {
         addBubble('記録に失敗した: ' + (data && data.message ? data.message : '不明なエラー'), 'system');
       }
@@ -812,12 +815,14 @@ function handleSend() {
       history: conversationHistory,
       userName: s.userName,
       aiName: s.aiName,
+      recallUsed: recallUsed,
     })
   })
     .then(r => r.json())
     .then(data => {
       typingEl.remove();
       const reply = (data && data.reply) ? data.reply : '（返答を受信できませんでした）';
+      if (data && data.recalled) recallUsed = true;
       addBubble(reply, 'titan');
       conversationHistory += `[${s.aiName}]: ${reply}\n`;
       speakText(reply);
