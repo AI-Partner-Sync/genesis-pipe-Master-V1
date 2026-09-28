@@ -777,7 +777,7 @@ function saveConversationLog() {
     redirect: 'follow',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     // aiName: GAS側でAIの発言を1行要約に圧縮して保存するために話者を特定する
-    body: JSON.stringify({ type: 'save', fullText: snapshot, aiName: s.aiName })
+    body: apsGasPostBody({ type: 'save', fullText: snapshot, aiName: s.aiName })
   })
     .then(r => r.json())
     .then(data => {
@@ -810,7 +810,7 @@ function handleSend() {
     method: 'POST',
     redirect: 'follow',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({
+    body: apsGasPostBody({
       type: 'ai_chat',
       fullText: text,
       history: conversationHistory,
@@ -822,6 +822,10 @@ function handleSend() {
     .then(r => r.json())
     .then(data => {
       typingEl.remove();
+      if (apsIsUnauthorized(data)) {
+        addBubble(APS_UNAUTHORIZED_MESSAGE, 'system');
+        return;
+      }
       const reply = (data && data.reply) ? data.reply : '（返答を受信できませんでした）';
       if (data && data.recalled) recallUsed = true;
       addBubble(reply, 'titan');
@@ -849,7 +853,7 @@ function speakText(text) {
     method: 'POST',
     redirect: 'follow',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ type: 'tts', text: plain, voice: s.ttsVoice, rate: s.ttsRate, pitch: s.ttsPitch })
+    body: apsGasPostBody({ type: 'tts', text: plain, voice: s.ttsVoice, rate: s.ttsRate, pitch: s.ttsPitch })
   })
     .then(r => r.json())
     .then(data => {

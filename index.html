@@ -721,9 +721,8 @@ drawSynapse();
 // Stats from GAS API
 async function loadStats() {
   try {
-    const gasUrl = apsLoadSettings().gasUrl;
-    const sep = gasUrl.includes('?') ? '&' : '?';
-    const res = await fetch(gasUrl + sep + 'page=timeline_data');
+    if (!apsLoadSettings().gasUrl) return;
+    const res = await fetch(apsGasGetUrl('page=timeline_data'));
     if (!res.ok) return;
     const data = await res.json();
     if (!Array.isArray(data)) return;

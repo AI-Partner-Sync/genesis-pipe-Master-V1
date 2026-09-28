@@ -470,12 +470,11 @@ function updateLegend() {
 
 async function loadData() {
   try {
-    const gasUrl = apsLoadSettings().gasUrl;
-    if (!gasUrl) throw new Error('GAS URLが未設定です');
-    const sep = gasUrl.includes('?') ? '&' : '?';
-    const res = await fetch(gasUrl + sep + 'page=timeline_data');
+    if (!apsLoadSettings().gasUrl) throw new Error('GAS URLが未設定です');
+    const res = await fetch(apsGasGetUrl('page=timeline_data'));
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
+    if (apsIsUnauthorized(data)) throw new Error(APS_UNAUTHORIZED_MESSAGE);
     allEntries = (Array.isArray(data) ? data : []).filter(e => e.date);
     document.getElementById('entry-count').textContent = allEntries.length + ' entries';
     document.getElementById('loading').style.display = 'none';
@@ -719,14 +718,13 @@ function computeHeaviness(e) {
 // 通信エラーや旧バージョンのGAS(エンドポイント無し)の場合は null。
 async function fetchMiniChapter(e, generate) {
   try {
-    const gasUrl = apsLoadSettings().gasUrl;
-    if (!gasUrl) return null;
-    const sep = gasUrl.includes('?') ? '&' : '?';
-    const res = await fetch(gasUrl + sep + `page=mini_chapter&level=${encodeURIComponent(e.level)}&date=${encodeURIComponent(e.date)}${generate ? '&generate=1' : ''}`);
+    if (!apsLoadSettings().gasUrl) return null;
+    const res = await fetch(apsGasGetUrl(`page=mini_chapter&level=${encodeURIComponent(e.level)}&date=${encodeURIComponent(e.date)}${generate ? '&generate=1' : ''}`));
     if (!res.ok) return null;
     const data = await res.json();
     if (data && data.status === 'success' && data.event) return data;
     if (data && data.status === 'not_generated') return data;
+    if (apsIsUnauthorized(data)) return data;
     return null;
   } catch (err) {
     return null;
@@ -808,6 +806,10 @@ function renderGenerateOffer(e, data) {
     box.innerHTML = `<div class="chapter-note">AIによる意味づけ(意味編集エンジン)に接続できませんでした。記録のみ表示しています。</div>`;
     return;
   }
+  if (apsIsUnauthorized(data)) {
+    box.innerHTML = `<div class="chapter-note">${esc(APS_UNAUTHORIZED_MESSAGE)}</div>`;
+    return;
+  }
   box.innerHTML = `
     <div class="chapter-ai-offer">
       <div class="chapter-ai-offer-text">この出来事が、その後の何につながっていたのか。AIが4つの視点(出来事・意味の再定義・学び・統合の一歩)で物語にします。</div>
@@ -845,6 +847,7 @@ async function runGenerate(btn) {
   const data = await fetchMiniChapter(e, true);
   if (currentChapterEntry !== e) return;
   if (data && data.status === 'success') renderAiChapter(e, data);
+  else if (apsIsUnauthorized(data)) renderGenerateOffer(e, data);
   else document.getElementById('chapter-ai').innerHTML =
     `<div class="chapter-note">生成に失敗しました。時間をおいてもう一度お試しください。</div>`;
 }

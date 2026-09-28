@@ -301,11 +301,10 @@ let emotionChart = null;
 
 async function loadData() {
   try {
-    const gasUrl = apsLoadSettings().gasUrl;
-    const sep = gasUrl.includes('?') ? '&' : '?';
-    const res = await fetch(gasUrl + sep + 'page=timeline_data');
+    const res = await fetch(apsGasGetUrl('page=timeline_data'));
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
+    if (apsIsUnauthorized(data)) throw new Error(APS_UNAUTHORIZED_MESSAGE);
     allEntries = Array.isArray(data) ? data : [];
     buildChart(allEntries.filter(e => e.level === 'Daily'), 'Daily');
     render();
