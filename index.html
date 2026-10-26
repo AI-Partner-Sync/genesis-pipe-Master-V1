@@ -3,7 +3,15 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0a0f1e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="AI Partner Sync">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="manifest" href="manifest.json">
 <title>AI Partner Sync — Master</title>
 <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 <script src="settings.js"></script>
@@ -29,6 +37,9 @@
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { background: var(--navy-950); }
+a, button { -webkit-tap-highlight-color: transparent; }
 
 body {
   background: var(--navy-950);
@@ -105,7 +116,7 @@ body {
 
 /* Header */
 header {
-  padding: 20px 32px;
+  padding: calc(20px + env(safe-area-inset-top)) calc(32px + env(safe-area-inset-right)) 20px calc(32px + env(safe-area-inset-left));
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -423,7 +434,7 @@ header {
 }
 @keyframes spin-border { to { --ta: 360deg; } }
 @keyframes spin-gold   { to { --tg: 360deg; } }
-.btn-timeline:hover,
+html.can-hover .btn-timeline:hover,
 .btn-timeline:active {
   border-color: transparent;
   color: var(--gold);
@@ -431,12 +442,12 @@ header {
   box-shadow: 0 0 20px 2px rgba(245,158,11,0.35),
               0 0 36px 8px rgba(168,85,247,0.25);
 }
-.btn-timeline:hover::before,
+html.can-hover .btn-timeline:hover::before,
 .btn-timeline:active::before {
   opacity: 0.5;
   animation-duration: 2.5s;
 }
-.btn-timeline:hover::after,
+html.can-hover .btn-timeline:hover::after,
 .btn-timeline:active::after {
   opacity: 1;
 }
@@ -492,7 +503,7 @@ header {
   opacity: 0;
   transition: opacity 0.2s;
 }
-.btn-sub:hover,
+html.can-hover .btn-sub:hover,
 .btn-sub:active {
   border-color: transparent;
   color: var(--gold);
@@ -500,12 +511,12 @@ header {
   box-shadow: 0 0 20px 2px rgba(245,158,11,0.35),
               0 0 36px 8px rgba(168,85,247,0.25);
 }
-.btn-sub:hover::before,
+html.can-hover .btn-sub:hover::before,
 .btn-sub:active::before {
   opacity: 0.5;
   animation-duration: 2.5s;
 }
-.btn-sub:hover::after,
+html.can-hover .btn-sub:hover::after,
 .btn-sub:active::after {
   opacity: 1;
 }
@@ -594,13 +605,24 @@ header {
     rgba(255,255,255,0.10) 70%,
     rgba(255,255,255,0.04) 100%);
   pointer-events: none;
-  transition: opacity 0.2s;
+  overflow: hidden;
+  transform: translate(calc(var(--gx, 0) * 6px), calc(var(--gy, 0) * 2px));
+  transition: opacity 0.2s, filter 0.15s;
+}
+/* 斜めに走る光の筋 */
+.gloss::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 38%, rgba(255,255,255,0.28) 50%, transparent 62%);
+  background-size: 300% 100%;
+  background-position: calc(50% + var(--gx, 0) * 45%) 0;
 }
 .btn-timeline > img, .btn-sub > img,
 .stat-card > .stat-value, .stat-card > .stat-label { position: relative; }
 
-.btn-timeline:hover, .btn-timeline:active,
-.btn-sub:hover, .btn-sub:active {
+html.can-hover .btn-timeline:hover, .btn-timeline:active,
+html.can-hover .btn-sub:hover, .btn-sub:active {
   border-color: rgba(252,211,77,0.45);
   background:
     linear-gradient(to bottom,
@@ -615,9 +637,51 @@ header {
 }
 .stat-label { color: #64748b; }
 
+/* ══════════════════════════════════════════
+   タップの手触り（押すと沈む）
+══════════════════════════════════════════ */
+.btn-timeline, .btn-sub {
+  transition: all 0.15s, scale 0.12s ease-out;
+}
+.btn-timeline:active, .btn-sub:active {
+  scale: 0.965;
+}
+.btn-timeline:active .gloss, .btn-sub:active .gloss {
+  filter: brightness(1.35);
+}
+.cta-group img {
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* iPhone: 傾きの許可を求めるチップ */
+.tilt-chip {
+  margin-top: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.16);
+  background: linear-gradient(to bottom, rgba(148,163,184,0.14), rgba(30,41,59,0.18));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.25), 0 4px 12px rgba(0,0,0,0.35);
+  backdrop-filter: blur(2px) saturate(150%);
+  -webkit-backdrop-filter: blur(2px) saturate(150%);
+  color: #cbd5e1;
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+.tilt-chip .material-icons { font-size: 16px; color: var(--gold); }
+.tilt-chip:active { scale: 0.96; }
+.tilt-chip[hidden] { display: none; }
+
 /* Footer */
 footer {
-  padding: 20px 32px;
+  padding: 20px calc(32px + env(safe-area-inset-right)) calc(20px + env(safe-area-inset-bottom)) calc(32px + env(safe-area-inset-left));
   text-align: center;
   font-size: 11px;
   color: #334155;
@@ -737,6 +801,10 @@ footer {
       </a>
     </div>
 
+    <button type="button" id="tilt-chip" class="tilt-chip" hidden>
+      <span class="material-icons">screen_rotation</span>傾きで星空を動かす
+    </button>
+
     <div class="stats-row" id="stats-row">
       <div class="stat-card">
         <span class="gloss" aria-hidden="true"></span>
@@ -797,24 +865,69 @@ LAYERS.forEach(L => {
   }
 });
 
+// マウスのある端末だけホバー演出を有効化。iOSで :active を効かせるため touchstart を登録
+if (window.matchMedia('(hover: hover)').matches) document.documentElement.classList.add('can-hover');
+document.addEventListener('touchstart', () => {}, { passive: true });
+
 // 視差: マウス位置（スマホは傾き）を -1〜1 で保持し、なめらかに追従
 const tilt = { x: 0, y: 0, tx: 0, ty: 0 };
+let tiltBase = null;   // 持ち方の基準角度（ゆっくり追従して自動で真ん中に戻る）
+let tiltActive = false;
+function onOrientation(e) {
+  if (e.gamma == null || e.beta == null) return;
+  tiltActive = true;
+  if (!tiltBase) tiltBase = { b: e.beta, g: e.gamma };
+  tiltBase.b += (e.beta  - tiltBase.b) * 0.01;
+  tiltBase.g += (e.gamma - tiltBase.g) * 0.01;
+  tilt.tx = Math.max(-1, Math.min(1, (e.gamma - tiltBase.g) / 20));
+  tilt.ty = Math.max(-1, Math.min(1, (e.beta  - tiltBase.b) / 20));
+}
 if (!reduceMotion) {
   window.addEventListener('pointermove', e => {
+    if (e.pointerType !== 'mouse') return;
     tilt.tx = (e.clientX / W) * 2 - 1;
     tilt.ty = (e.clientY / H) * 2 - 1;
   });
-  window.addEventListener('deviceorientation', e => {
-    if (e.gamma == null || e.beta == null) return;
-    tilt.tx = Math.max(-1, Math.min(1, e.gamma / 30));
-    tilt.ty = Math.max(-1, Math.min(1, (e.beta - 45) / 30));
-  });
+  window.addEventListener('deviceorientation', onOrientation);
 }
 
+// iPhone（iOS 13+）は傾きセンサーの利用にユーザーの許可が必要
+const needsTiltPermission = !reduceMotion &&
+  typeof DeviceOrientationEvent !== 'undefined' &&
+  typeof DeviceOrientationEvent.requestPermission === 'function';
+const tiltChip = document.getElementById('tilt-chip');
+let tiltDenied = false;
+try { tiltDenied = localStorage.getItem('aps_tilt_denied') === '1'; } catch (_) {}
+async function requestTilt() {
+  try {
+    const res = await DeviceOrientationEvent.requestPermission();
+    if (res !== 'granted') {
+      tiltDenied = true;
+      try { localStorage.setItem('aps_tilt_denied', '1'); } catch (_) {}
+    }
+  } catch (_) { /* ジェスチャー外の呼び出し等は無視 */ }
+  tiltChip.hidden = true;
+}
+if (needsTiltPermission) {
+  // すでに許可済みなら少し待てばイベントが届くので、そのときはチップを出さない
+  setTimeout(() => { if (!tiltActive && !tiltDenied) tiltChip.hidden = false; }, 800);
+  tiltChip.addEventListener('click', requestTilt);
+  // 背景（ボタン以外）をタップしたときにも許可を求める
+  document.addEventListener('touchend', e => {
+    if (tiltActive || tiltDenied) return;
+    if (e.target.closest('a, button, input, select, textarea, #settings-overlay')) return;
+    requestTilt();
+  }, { passive: true });
+}
+
+const rootStyle = document.documentElement.style;
 function drawSynapse() {
   ctx.clearRect(0, 0, W, H);
   tilt.x += (tilt.tx - tilt.x) * 0.05;
   tilt.y += (tilt.ty - tilt.y) * 0.05;
+  // ボタンのツヤも同じ傾きで動かす（手前の星と同じ向き）
+  rootStyle.setProperty('--gx', (-tilt.x).toFixed(3));
+  rootStyle.setProperty('--gy', (-tilt.y).toFixed(3));
   const now = Date.now() * 0.001;
 
   LAYERS.forEach(L => {
