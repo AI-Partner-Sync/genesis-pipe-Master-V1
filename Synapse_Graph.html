@@ -651,16 +651,15 @@ function buildGraph() {
   });
 }
 
-// ===== 星空の演出（感情の星雲・光る星・シナプスを流れる光の粒） =====
+// ===== 星空の演出（光る星・シナプスを流れる光の粒） =====
 // vis-network が描く星（クリック・ドラッグ・ラベルはそのまま）の下と上に、絵を描き足す。
 const ART_REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const ART_MAX_PARTICLES = 40;     // 光の粒の上限（iPhoneでも重くならない数）
-const ART_PARTICLE_RATIO = 0.25;  // 粒の大きさ＝出発点の星の大きさの25%
+const ART_PARTICLE_RATIO = 0.32;  // 粒の大きさ＝出発点の星の大きさの約3割
 const ART_PARTICLE_ALPHA = 0.45;  // 粒の輝度（控えめ）
 let artNodes = new Map();         // id → { color, size, spike, phase, speed }
 let artEdges = [];                // 光の粒が流れる線 { id, from, to }
 let artParticles = [];
-let artNebula = null;             // 星雲を低解像度で描き溜めたもの
 let artHoverId = null;
 const artSpriteCache = new Map();
 
@@ -703,38 +702,6 @@ function artSprite(color, kind) {
   return c;
 }
 
-// 星が集まる場所に、周りの感情の色でにじむ星雲を描く（配置が落ち着いた時だけ作り直す）
-function buildNebula() {
-  if (!network) return;
-  const pos = network.getPositions();
-  const pts = [];
-  artNodes.forEach((a, id) => { if (pos[id]) pts.push({ x: pos[id].x, y: pos[id].y, a }); });
-  if (!pts.length) { artNebula = null; return; }
-  const R = 150;
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  pts.forEach(p => {
-    minX = Math.min(minX, p.x - R); maxX = Math.max(maxX, p.x + R);
-    minY = Math.min(minY, p.y - R); maxY = Math.max(maxY, p.y + R);
-  });
-  const w = maxX - minX, h = maxY - minY;
-  const k = Math.min(0.5, 900 / Math.max(w, h)); // ぼかした雲なので低解像度で十分
-  const c = document.createElement('canvas');
-  c.width = Math.ceil(w * k);
-  c.height = Math.ceil(h * k);
-  const g = c.getContext('2d');
-  g.globalCompositeOperation = 'lighter';
-  pts.forEach(({ x, y, a }) => {
-    const [r, gr, b] = hexToRgb(a.color);
-    const cx = (x - minX) * k, cy = (y - minY) * k, rad = (R * 0.6 + a.size * 4) * k;
-    const grad = g.createRadialGradient(cx, cy, 0, cx, cy, rad);
-    grad.addColorStop(0, `rgba(${r},${gr},${b},0.075)`);
-    grad.addColorStop(1, `rgba(${r},${gr},${b},0)`);
-    g.fillStyle = grad;
-    g.fillRect(cx - rad, cy - rad, rad * 2, rad * 2);
-  });
-  artNebula = { canvas: c, x: minX, y: minY, w, h };
-}
-
 function artTwinkle(a, now) {
   return ART_REDUCED ? 1 : 0.75 + 0.25 * Math.sin(now * 0.001 * a.speed + a.phase);
 }
@@ -746,7 +713,6 @@ function resetParticle(p, randomStart) {
 }
 
 function attachStarfieldArt(net, edges) {
-  artNebula = null;
   artHoverId = null;
   artEdges = edges.filter(e => artNodes.has(e.from) || artNodes.has(e.to));
   artParticles = [];
@@ -755,19 +721,13 @@ function attachStarfieldArt(net, edges) {
     for (let i = 0; i < count; i++) { const p = {}; resetParticle(p, true); artParticles.push(p); }
   }
 
-  net.on('stabilizationIterationsDone', buildNebula);
-  net.on('stabilized', buildNebula);
   net.on('hoverNode', params => { artHoverId = params.node; });
   net.on('blurNode', () => { artHoverId = null; });
 
-  // 星の下: 星雲と後光
+  // 星の下: 後光
   net.on('beforeDrawing', ctx => {
     const now = performance.now();
     ctx.save();
-    if (artNebula) {
-      ctx.globalAlpha = ART_REDUCED ? 1 : 0.85 + 0.15 * Math.sin(now / 4000);
-      ctx.drawImage(artNebula.canvas, artNebula.x, artNebula.y, artNebula.w, artNebula.h);
-    }
     ctx.globalCompositeOperation = 'lighter';
     const pos = net.getPositions();
     artNodes.forEach((a, id) => {
@@ -808,7 +768,7 @@ function attachStarfieldArt(net, edges) {
       const a0 = artNodes.get(e.to) || artNodes.get(e.from);
       const a1 = artNodes.get(e.from) || a0;
       const color = pt.t < 0.5 ? a0.color : a1.color;
-      const r = Math.max(1.2, a0.size * ART_PARTICLE_RATIO) * 2; // 芯の明るい部分が星の約25%になる大きさ
+      const r = Math.max(1.2, a0.size * ART_PARTICLE_RATIO) * 2; // 芯の明るい部分が星の約3割になる大きさ
       ctx.globalAlpha = ART_PARTICLE_ALPHA * Math.sin(Math.PI * pt.t);
       ctx.drawImage(artSprite(color, 'core'), xy.x - r, xy.y - r, r * 2, r * 2);
     });
