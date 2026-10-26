@@ -210,6 +210,38 @@ header {
 .settings-input:focus, .settings-select:focus { border-color: var(--gold); }
 .settings-select option { background: var(--navy-800); }
 .settings-hint { font-size: 11px; color: #475569; margin-bottom: 16px; }
+.settings-link-status {
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+.settings-link-status.ok { color: #4ade80; }
+.settings-link-status.ng { color: #f87171; }
+.settings-link-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: -6px 0 16px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--navy-700);
+  background: none;
+  color: #94a3b8;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.settings-link-copy-btn .material-icons { font-size: 14px; }
+.settings-link-copy-btn[hidden] { display: none; }
+.stats-notice {
+  margin-top: 14px;
+  max-width: 360px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #fca5a5;
+  text-align: center;
+}
+.stats-notice[hidden] { display: none; }
 .settings-section-title {
   font-size: 11px;
   font-weight: 700;
@@ -715,6 +747,19 @@ footer {
              placeholder="https://script.google.com/macros/s/.../exec">
     </div>
 
+    <div class="settings-section-title">🔐 スプレッドシート連携</div>
+    <div class="settings-link-status" id="settings-link-status"></div>
+    <label class="settings-label">アプリ連携リンクを貼り付け</label>
+    <input type="text" id="settings-setup-link" class="settings-input" autocomplete="off"
+           autocapitalize="off" spellcheck="false" placeholder="https://…/index.html#aps_setup&gas=…&key=…">
+    <div class="settings-hint">
+      ホーム画面のアプリは Safari と設定が別になるため、連携リンクをここに貼り付けて保存してください。
+      リンクはスプレッドシートのメニュー「📱 アプリ連携リンクを発行」か、連携済みの Safari の下のボタンでコピーできます。
+    </div>
+    <button type="button" class="settings-link-copy-btn" id="settings-link-copy-btn" onclick="apsCopySetupLink()">
+      <span class="material-icons">content_copy</span>この端末の連携リンクをコピー
+    </button>
+
     <div class="settings-section-title">👤 パートナー設定</div>
     <label class="settings-label">あなたの名前</label>
     <input type="text" id="settings-user-name" class="settings-input" placeholder="例: Rikki">
@@ -822,6 +867,7 @@ footer {
         <div class="stat-label">WEEKS TRACKED</div>
       </div>
     </div>
+    <p class="stats-notice" id="stats-notice" hidden></p>
   </section>
 
   <footer>
@@ -971,13 +1017,20 @@ function drawSynapse() {
 drawSynapse();
 
 // Stats from GAS API
+function showStatsNotice(msg) {
+  const el = document.getElementById('stats-notice');
+  el.textContent = msg || '';
+  el.hidden = !msg;
+}
 async function loadStats() {
   try {
-    if (!apsLoadSettings().gasUrl) return;
+    if (!apsLoadSettings().gasUrl) { showStatsNotice('⚙️ 設定からスプレッドシートと連携してください。'); return; }
     const res = await fetch(apsGasGetUrl('page=timeline_data'));
     if (!res.ok) return;
     const data = await res.json();
+    if (apsIsUnauthorized(data)) { showStatsNotice(APS_UNAUTHORIZED_MESSAGE + '（ホーム画面のアプリでは、⚙️ 設定に連携リンクを貼り付けてください）'); return; }
     if (!Array.isArray(data)) return;
+    showStatsNotice('');
     const total  = data.length;
     const daily  = data.filter(e => e.level === 'Daily').length;
     const weekly = data.filter(e => e.level === 'Weekly').length;
@@ -997,6 +1050,12 @@ function apsOpenSettings() {
   document.getElementById('settings-url-display').title = s.gasUrl;
   document.getElementById('settings-gas-url-input').value = s.gasUrl;
   document.getElementById('settings-url-edit').classList.remove('open');
+  document.getElementById('settings-setup-link').value = '';
+  const linked = !!(s.gasUrl && s.appKey);
+  const st = document.getElementById('settings-link-status');
+  st.textContent = linked ? '✅ 連携済み（鍵あり）' : '⚠️ 未連携（鍵がありません）';
+  st.className = 'settings-link-status ' + (linked ? 'ok' : 'ng');
+  document.getElementById('settings-link-copy-btn').hidden = !linked;
   document.getElementById('settings-user-name').value = s.userName;
   document.getElementById('settings-ai-name').value   = s.aiName;
   document.getElementById('settings-tts-enabled').checked = s.ttsEnabled;
@@ -1024,9 +1083,31 @@ function apsCopyGasUrl() {
     setTimeout(() => { btn.textContent = 'content_copy'; }, 1500);
   }).catch(() => prompt('URLをコピーしてください:', url));
 }
+function apsCopySetupLink() {
+  const link = apsBuildSetupLink();
+  if (!link) return;
+  navigator.clipboard.writeText(link).then(() => {
+    const btn = document.getElementById('settings-link-copy-btn');
+    const html = btn.innerHTML;
+    btn.textContent = '✅ コピーしました';
+    setTimeout(() => { btn.innerHTML = html; }, 1500);
+  }).catch(() => { prompt('このリンクをコピーしてください', link); });
+}
 function apsSaveSettingsFromModal() {
-  const urlInput = document.getElementById('settings-gas-url-input').value.trim();
+  let urlInput = document.getElementById('settings-gas-url-input').value.trim();
   const urlEditOpen = document.getElementById('settings-url-edit').classList.contains('open');
+  // 連携リンク（専用欄でもURL欄でも可）が貼られていれば、URLと鍵をまとめて保存する
+  const linkText = document.getElementById('settings-setup-link').value.trim() ||
+                   (urlInput.includes('#aps_setup') ? urlInput : '');
+  let setup = null;
+  if (linkText) {
+    setup = apsParseSetupLink(linkText);
+    if (!setup) {
+      alert('⚠️ 連携リンクを読み取れませんでした。「#aps_setup&gas=…&key=…」を含むリンク全体を貼り付けてください');
+      return;
+    }
+    urlInput = '';
+  }
   if (urlEditOpen && urlInput && !urlInput.includes('/macros/s/')) {
     alert('⚠️ 正しいGASウェブアプリURL（/exec で終わるURL）を入力してください');
     return;
@@ -1041,6 +1122,7 @@ function apsSaveSettingsFromModal() {
     ttsPitch: parseFloat(document.getElementById('settings-tts-pitch').value),
   };
   if (urlEditOpen && urlInput) patch.gasUrl = urlInput;
+  if (setup) Object.assign(patch, setup);
   const merged = apsSaveSettings(patch);
   const btn = document.getElementById('settings-save-btn');
   btn.disabled = true;

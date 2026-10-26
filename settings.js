@@ -65,17 +65,35 @@ function apsPushPartnerNamesToGas(gasUrl, userName, aiName) {
   }).then(r => r.json()).catch(() => null);
 }
 
-// アプリ連携リンク（…/index.html#aps_setup&gas=<GAS URL>&key=<鍵>）を開いた時の処理。
+// アプリ連携リンク（…/index.html#aps_setup&gas=<GAS URL>&key=<鍵>）から gasUrl と鍵を取り出す。
+// リンク全体でも「#aps_setup…」部分だけでもよい。正しくなければ null。
+function apsParseSetupLink(text) {
+  const i = (text || '').indexOf('#aps_setup');
+  if (i < 0) return null;
+  const params = new URLSearchParams(text.slice(i).trim().replace(/^#aps_setup&?/, ''));
+  const gas = params.get('gas');
+  const key = params.get('key');
+  if (!gas || !/^https:\/\/script\.google\.com\//.test(gas) || !key) return null;
+  return { gasUrl: gas, appKey: key };
+}
+
+// 今の設定から連携リンクを組み立てる（Safari→ホーム画面アプリへ鍵を移すため）。鍵がなければ ''
+function apsBuildSetupLink() {
+  const s = apsLoadSettings();
+  if (!s.gasUrl || !s.appKey) return '';
+  const base = location.href.split('#')[0].replace(/[^/]*$/, '') + 'index.html';
+  return base + '#aps_setup&gas=' + encodeURIComponent(s.gasUrl) + '&key=' + encodeURIComponent(s.appKey);
+}
+
+// アプリ連携リンクを開いた時の処理。
 // gasUrlと鍵を保存し、鍵がアドレスバーや履歴に残らないようにハッシュを消してから知らせる。
 (function apsHandleSetupLink() {
   const hash = location.hash || '';
   if (!hash.startsWith('#aps_setup')) return;
-  const params = new URLSearchParams(hash.replace(/^#aps_setup&?/, ''));
-  const gas = params.get('gas');
-  const key = params.get('key');
+  const parsed = apsParseSetupLink(hash);
   history.replaceState(null, '', location.pathname + location.search);
-  if (!gas || !/^https:\/\/script\.google\.com\//.test(gas) || !key) return;
-  apsSaveSettings({ gasUrl: gas, appKey: key });
+  if (!parsed) return;
+  apsSaveSettings(parsed);
   const show = () => {
     const el = document.createElement('div');
     el.textContent = '🔐 スプレッドシートとの連携が完了しました';
