@@ -347,6 +347,7 @@ async function loadData() {
     buildChart(allEntries.filter(e => e.level === 'Daily'), 'Daily');
     render();
     renderDue();
+    syncReflectionLog();
     document.getElementById('entry-count').textContent = allEntries.length + ' entries';
   } catch(err) {
     document.getElementById('timeline').innerHTML =
@@ -443,7 +444,7 @@ function buildCard(e, animIdx, globalIdx) {
     ${REFLECT_ON ? `
     <div class="card-actions">
       ${hasDetail ? `<button class="toggle-btn" onclick="toggleDetail(${globalIdx},this)">▶ 詳細を見る</button>` : ''}
-      ${e.summary ? `<button class="reflect-btn${ApsReflection.wasReflected(e) ? ' done' : ''}" onclick="openReflection(${globalIdx})"><span class="ring"></span>この日を振り返る</button>` : ''}
+      ${e.summary ? `<button class="reflect-btn${ApsReflection.wasReflected(e) ? ' done' : ''}" data-idx="${globalIdx}" onclick="openReflection(${globalIdx})"><span class="ring"></span>この日を振り返る</button>` : ''}
     </div>` : hasDetail ? `
     <button class="toggle-btn" onclick="toggleDetail(${globalIdx},this)">▶ 詳細を見る</button>` : ''}
     ${hasDetail ? `
@@ -478,6 +479,17 @@ function openReflection(idx) {
     if (btn) btn.classList.toggle('done', ApsReflection.wasReflected(e));
     renderDue();
   } });
+}
+
+// ほかの端末で声に出した記録（スプレッドシートのReflection_Log）を取り込み、丸印と「思い出す時期」をそろえる
+async function syncReflectionLog() {
+  if (!REFLECT_ON) return;
+  if (!(await ApsReflection.syncLog())) return;
+  document.querySelectorAll('.reflect-btn[data-idx]').forEach(btn => {
+    const e = allEntries[Number(btn.dataset.idx)];
+    if (e) btn.classList.toggle('done', ApsReflection.wasReflected(e));
+  });
+  renderDue();
 }
 
 // 声に出せた振り返りは、1日後・3日後・1週間後・3週間後にもう一度ここに出す
