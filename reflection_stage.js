@@ -57,6 +57,28 @@
   ];
   const POOL_NO_SCORE = ['SOM14', 'MM08', 'MM05', 'SOM06'];
 
+  // AIの一言がまだない日に見せる「たとえば」。{q} にはその日の記録に出てきた本人の言葉が入る。
+  // [本人の言葉がある時, 見つからない時]
+  const EXAMPLES = {
+    MM19: ['その通り、「{q}」。だからこそ、ここから変えられる。', 'その通り、今日はうまくいかなかった。だからこそ、次の一手が見えてくる。'],
+    SOM15: ['「{q}」。そう感じなかった瞬間は、この一週間に一度もなかった？', '「いつも」「誰も」と感じる時、例外は本当に一度もなかった？'],
+    SOM16: ['「{q}」と感じる自分は、本当は何を守ろうとしている？', 'こう感じる自分は、本当は何を守ろうとしている？'],
+    SOM11: ['「{q}」の原因は、自分の弱さではなく、今の仕組みの無理かもしれない。', '原因は自分の弱さではなく、今の仕組みの無理かもしれない。'],
+    SOM12: ['「{q}」と言えるのは、それだけ本気で向き合ってきた証拠かもしれない。', 'ここまで苦しいのは、それだけ本気で向き合ってきた証拠かもしれない。'],
+    SOM10: ['「{q}」。限界荷重を超えた機械なら、まず荷を下ろすところから始める。', '限界荷重を超えた機械なら、まず荷を下ろすところから始める。'],
+    SOM14: ['「{q}」で、本当は何を手に入れたい？', 'この気持ちで、本当は何を手に入れたい？'],
+    SOM13: ['「{q}」。具体的には、いつ、何が、どれくらい？', '具体的には、いつ、何が、どれくらい重かった？'],
+    SOM09: ['「{q}」のままでいるより、仕組みを一つ変えたら、どんな結果になる？', 'このまま耐えるより、仕組みを一つ変えたら、どんな結果になる？'],
+    SOM07: ['「{q}」よりも、今の自分にとって大切なことは何だろう？', '目の前のことよりも、今の自分にとって大切なことは何だろう？'],
+    MM04: ['「{q}」と感じるということは、大事にしたい基準があるということ。', '心が動いたということは、大事にしたい基準があるということ。'],
+    MM05: ['「{q}」。この流れの先で、次はどんな景色が見えるだろう。', 'この流れの先で、次はどんな景色が見えるだろう。'],
+    MM03: ['「{q}」と言えたから、明日の一歩はもっと軽くなる。', '今日ここまで来られたから、明日の一歩はもっと軽くなる。'],
+    MM07: ['「{q}」。この感覚は、いつでも思い出すことができる。', 'この感覚は、いつでも思い出すことができる。'],
+    MM08: ['「{q}」。この気づきを、明日に持っていこう。', 'この日の気づきを、明日に持っていこう。'],
+    MM02: ['「{q}」と言えるのは、良いことだ。', 'ここまで来られたのは、良いことだ。'],
+    SOM06: ['「{q}」。10年後の自分から見たら、どんな一日に見える？', '10年後の自分から見たら、今日はどんな一日に見える？'],
+  };
+
   let state = null; // { entry, step, content, aiStatus }
   let root = null;
 
@@ -85,6 +107,7 @@
     r.dueAt = spoken && gap ? new Date(Date.now() + gap * 86400000).toISOString() : (r.dueAt || null);
     log[k] = r;
     saveLog(log);
+    return r;
   }
   // 思い出す時期が来た記録のキー一覧（古い順）
   function dueKeys() {
@@ -116,10 +139,20 @@
     }
   }
 
-  function sceneLines(e) {
-    const text = String(e.summary || e.keystone || '').replace(/\s+/g, ' ').trim();
-    const lines = text.split(/(?<=[。！？])/).map(s => s.trim()).filter(Boolean);
-    return lines.slice(0, 5);
+  function splitLines(text, max) {
+    return String(text || '').replace(/\s+/g, ' ').trim()
+      .split(/(?<=[。！？])/).map(s => s.trim()).filter(Boolean).slice(0, max);
+  }
+  function sceneLines(e) { return splitLines(e.summary || e.keystone, 4); }
+
+  // 記録の中の「」から、本人の言葉らしいものを1つ選ぶ。Keystoneの言葉（その日の核心の問い）を優先する。
+  function pickQuote(e) {
+    const grab = t => [...String(t || '').matchAll(/「([^「」]{6,24})」/g)].map(m => m[1]);
+    const fromKeystone = grab(e.keystone);
+    if (fromKeystone.length) return fromKeystone[0];
+    const fromSummary = grab(e.summary);
+    if (!fromSummary.length) return null;
+    return (e.score && e.score < 350) ? fromSummary[fromSummary.length - 1] : fromSummary[0];
   }
 
   function slugOf(e) {
@@ -141,6 +174,7 @@
     return {
       kind: 'ai',
       scene: Array.isArray(r.scene) && r.scene.length ? r.scene.slice(0, 5) : sceneLines(e),
+      keystone: e.summary ? e.keystone || '' : '',
       ask: r.ask || 'この日の自分に、何と言う？',
       said: r.said,
       mean: r.mean || '',
@@ -152,12 +186,16 @@
   function contentFromTechnique(e) {
     const id = pickTechnique(e);
     const [name, use, form] = TECHNIQUES[id];
+    const quote = pickQuote(e);
+    const ex = EXAMPLES[id] || ['', ''];
     return {
       kind: 'form',
       scene: sceneLines(e),
+      keystone: e.summary ? e.keystone || '' : '',
       ask: 'この日の自分に、何と言う？',
       said: null,
-      form, name, use,
+      form, name, use, quote,
+      example: quote ? ex[0].replace('{q}', quote) : ex[1],
       techniques: [id],
     };
   }
@@ -195,6 +233,12 @@
 .aps-rf .rf-mean{font-size:16px;line-height:2;margin:0}
 .aps-rf .rf-soft{color:var(--rf-muted);font-size:14px;line-height:1.8;margin:0}
 .aps-rf .rf-tech{font-size:12px;color:var(--rf-muted);letter-spacing:.04em}
+.aps-rf .rf-key{border-left:2px solid var(--rf-gold);padding-left:14px;margin:6px 0 0}
+.aps-rf .rf-key small{display:block;font-family:ui-monospace,Menlo,monospace;font-size:10px;letter-spacing:.14em;color:var(--rf-gold)}
+.aps-rf .rf-key span{font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-size:17px;line-height:1.9}
+.aps-rf .rf-quote{font-size:13px;color:var(--rf-muted);margin:0}
+.aps-rf .rf-quote b{color:var(--rf-ink);font-weight:600}
+.aps-rf .rf-form{font-size:13px;color:var(--rf-muted);margin:0;line-height:1.8}
 .aps-rf .rf-tech b{color:var(--rf-gold);font-weight:600}
 .aps-rf .rf-choice{display:flex;flex-direction:column;gap:12px;align-items:center;margin-top:12px}
 .aps-rf .rf-pill{border:1px solid var(--rf-muted);border-radius:999px;padding:10px 26px;font-size:15px}
@@ -222,7 +266,8 @@
     const name = STEPS[step];
     if (name === 'scene') {
       return `<p class="rf-slug rf-fade">${esc(slugOf(e))}</p>
-        <p class="rf-ep">${c.scene.map(l => `<span>${esc(l)}</span>`).join('')}</p>`;
+        <p class="rf-ep">${c.scene.map(l => `<span>${esc(l)}</span>`).join('')}</p>
+        ${c.keystone ? `<p class="rf-key rf-fade" style="animation-delay:${0.6 * c.scene.length}s"><small>KEYSTONE ／ この日の核心</small><span>${esc(c.keystone)}</span></p>` : ''}`;
     }
     if (name === 'ask') {
       return `<div class="rf-breath" aria-hidden="true">一呼吸</div>
@@ -235,8 +280,9 @@
       }
       const canMake = aiStatus === 'not_generated';
       return `<p class="rf-tech rf-fade">今日の技法　${techLine(c.techniques)}</p>
-        <p class="rf-said rf-fade">${esc(c.form)}</p>
-        <p class="rf-soft rf-fade">この型で、この日の自分への一言をつくって、声に出してみる。</p>
+        ${c.quote ? `<p class="rf-quote rf-fade">この日のあなたの言葉　<b>「${esc(c.quote)}」</b></p>` : ''}
+        <p class="rf-said rf-fade">${esc(c.example || c.form)}</p>
+        <p class="rf-form rf-fade">型：${esc(c.form)}<br>自分の言葉に言い換えても、このまま声に出してもいい。</p>
         ${canMake ? `<div class="rf-choice rf-fade">
           <button type="button" class="rf-pill" data-rf="make">この日の一言をAIと一緒につくる</button>
           <span class="rf-soft" style="font-size:12px">Geminiを1回使います。一度つくると保存され、次からは無料で開けます。</span></div>` : ''}
@@ -252,10 +298,21 @@
       return `<p class="rf-tech rf-fade">${techLine(c.techniques)}　こんな時に</p>
         <p class="rf-mean rf-fade">${esc(c.use)}</p>`;
     }
+    if (state.done) {
+      const r = state.done;
+      const next = r.dueAt ? new Date(r.dueAt) : null;
+      const when = next ? `${next.getMonth() + 1}月${next.getDate()}日` : '';
+      return `<p class="rf-slug rf-fade">${state.doneSpoken ? '記録しました' : '心の中で、受け取りました'}</p>
+        <p class="rf-mean rf-fade">${state.doneSpoken
+          ? `声に出せたのは、この日で${r.spoken}回目です。<br>${when}に、この日がもう一度「思い出す時期です」として一覧の上に戻ってきます。`
+          : '声に出せた日から、思い出す時期の予定が始まります。'}</p>
+        <p class="rf-soft rf-fade">一覧の「この日を振り返る」の丸が、金色になります。記録はこの端末の中だけに残ります。</p>
+        <div class="rf-choice rf-fade"><button type="button" class="rf-pill" data-rf="close">閉じる</button></div>`;
+    }
     // voice: 声に出す
     const heavy = e.heaviness === 'heavy';
     return `<p class="rf-slug rf-fade">声に出して、言ってみる</p>
-      <p class="rf-said rf-fade">${c.kind === 'ai' ? br(c.said) : esc(c.form)}</p>
+      <p class="rf-said rf-fade">${c.kind === 'ai' ? br(c.said) : esc(c.example || c.form)}</p>
       <div class="rf-choice rf-fade">
         <button type="button" class="rf-pill main" data-rf="spoken">声に出せた</button>
         <button type="button" class="rf-link" data-rf="later">今日は心の中だけで</button>
@@ -297,9 +354,8 @@
     render();
   }
 
-  function close(spoken) {
+  function close() {
     if (!state) return;
-    if (spoken !== undefined) record(state.entry, spoken);
     const done = state.onClose;
     state = null;
     if (root) { root.remove(); root = null; }
@@ -314,8 +370,11 @@
     const act = t.dataset.rf;
     if (act === 'close') return close();
     if (act === 'make') { ev.stopPropagation(); return makeWithAi(); }
-    if (act === 'spoken') return close(true);
-    if (act === 'later') return close(false);
+    if (act === 'spoken' || act === 'later') {
+      state.doneSpoken = act === 'spoken';
+      state.done = record(state.entry, state.doneSpoken);
+      return render();
+    }
     if (act === 'stage') {
       if (ev.target.closest('a')) return;
       if (STEPS[state.step] === 'voice' || state.aiStatus === 'making') return;
