@@ -107,7 +107,50 @@
     r.dueAt = spoken && gap ? new Date(Date.now() + gap * 86400000).toISOString() : (r.dueAt || null);
     log[k] = r;
     saveLog(log);
+    pushRecord(e, spoken);
     return r;
+  }
+
+  // ===== 練習の記録をスプレッドシート（Reflection_Log）とそろえる =====
+  // GASに ?page=reflection_record / reflection_log がある時だけ動く（無ければ端末の中だけで続ける）。
+  // こうすると、どの端末で開いても同じ「思い出す時期」が出て、GASから毎朝の通知も送れる。
+  function gasReady() { return typeof apsLoadSettings === 'function' && !!apsLoadSettings().gasUrl; }
+
+  async function pushRecord(e, spoken) {
+    if (!gasReady()) return;
+    try {
+      const res = await fetch(apsGasGetUrl(`page=reflection_record&level=${encodeURIComponent(e.level)}&date=${encodeURIComponent(e.date)}&spoken=${spoken ? 1 : 0}`));
+      const data = await res.json();
+      if (data && data.status === 'success' && data.record) mergeRows([data.record]);
+    } catch (err) { /* 通信できなくても、端末の中の記録は残っている */ }
+  }
+
+  // 声に出せた回数が多い方を正とする（同じなら新しい方）。端末にしかない記録は消さない。
+  function mergeRows(rows) {
+    const log = loadLog();
+    let changed = false;
+    rows.forEach(row => {
+      if (!row || !row.level || !row.date) return;
+      const k = keyOf(row), local = log[k];
+      const take = !local || row.spoken > (local.spoken || 0)
+        || (row.spoken === (local.spoken || 0) && String(row.lastAt || '') > String(local.lastAt || ''));
+      if (!take) return;
+      log[k] = { opened: row.opened || 0, spoken: row.spoken || 0, lastAt: row.lastAt || null, dueAt: row.dueAt || null };
+      changed = true;
+    });
+    if (changed) saveLog(log);
+    return changed;
+  }
+
+  // Timeline Viewer を開いた時に呼ぶ。スプレッドシートの記録を取り込んだら true。
+  async function syncLog() {
+    if (!gasReady()) return false;
+    try {
+      const res = await fetch(apsGasGetUrl('page=reflection_log'));
+      const data = await res.json();
+      if (!data || data.status !== 'success' || !Array.isArray(data.log)) return false;
+      return mergeRows(data.log);
+    } catch (err) { return false; }
   }
   // 思い出す時期が来た記録のキー一覧（古い順）
   function dueKeys() {
@@ -307,7 +350,7 @@
         <p class="rf-mean rf-fade">${state.doneSpoken
           ? `声に出せたのは、この日で${r.spoken}回目です。<br>${when}に、この日がもう一度「思い出す時期です」として一覧の上に戻ってきます。`
           : '声に出せた日から、思い出す時期の予定が始まります。'}</p>
-        <p class="rf-soft rf-fade">一覧の「この日を振り返る」の丸が、金色になります。記録はこの端末の中だけに残ります。</p>
+        <p class="rf-soft rf-fade">一覧の「この日を振り返る」の丸が、金色になります。記録はスプレッドシートにも残るので、ほかの端末でも同じ日に戻ってきます。</p>
         <div class="rf-choice rf-fade"><button type="button" class="rf-pill" data-rf="close">閉じる</button></div>`;
     }
     // voice: 声に出す
@@ -419,5 +462,5 @@
     if (STEPS[state.step] !== 'scene') render();
   }
 
-  window.ApsReflection = { open, dueKeys, wasReflected, keyOf, TECHNIQUES };
+  window.ApsReflection = { open, dueKeys, wasReflected, keyOf, syncLog, TECHNIQUES };
 })();
