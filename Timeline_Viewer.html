@@ -7,6 +7,7 @@
 <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="settings.js"></script>
+<script src="reflection_stage.js"></script>
 <style>
 :root {
   --navy-950: #0a0f1e;
@@ -220,6 +221,41 @@ header h1 { font-size: 16px; font-weight: 700; color: var(--gold); letter-spacin
 }
 .toggle-btn:hover { color: var(--gold); }
 
+/* 振り返り（reflection_stage.js）の入口 */
+.card-actions { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.reflect-btn {
+  font-size: 11px;
+  color: #94a3b8;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: color 0.15s;
+}
+.reflect-btn:hover { color: var(--gold); }
+.reflect-btn .ring { width: 9px; height: 9px; border: 1.5px solid currentColor; border-radius: 50%; }
+.reflect-btn.done .ring { background: var(--gold); border-color: var(--gold); }
+.reflect-due {
+  max-width: 860px;
+  margin: 18px auto 0;
+  padding: 0 24px;
+}
+.reflect-due button {
+  width: 100%;
+  text-align: left;
+  background: rgba(245,158,11,0.08);
+  border: 1px solid rgba(245,158,11,0.35);
+  border-radius: 10px;
+  color: #e2e8f0;
+  font-size: 13px;
+  padding: 12px 16px;
+  cursor: pointer;
+}
+.reflect-due button span { color: var(--gold); }
+
 .detail {
   display: none;
   margin-top: 10px;
@@ -287,6 +323,8 @@ header h1 { font-size: 16px; font-weight: 700; color: var(--gold); letter-spacin
   <button class="filter-btn daily"      onclick="setFilter('Daily')">Daily</button>
 </div>
 
+<div class="reflect-due" id="reflect-due" hidden></div>
+
 <div class="timeline" id="timeline">
   <div class="loading">
     <div class="spinner"></div>
@@ -308,6 +346,7 @@ async function loadData() {
     allEntries = Array.isArray(data) ? data : [];
     buildChart(allEntries.filter(e => e.level === 'Daily'), 'Daily');
     render();
+    renderDue();
     document.getElementById('entry-count').textContent = allEntries.length + ' entries';
   } catch(err) {
     document.getElementById('timeline').innerHTML =
@@ -401,13 +440,58 @@ function buildCard(e, animIdx, globalIdx) {
       ${pillHtml}
     </div>
     <div class="summary">${esc(e.summary)}</div>
+    ${REFLECT_ON ? `
+    <div class="card-actions">
+      ${hasDetail ? `<button class="toggle-btn" onclick="toggleDetail(${globalIdx},this)">▶ 詳細を見る</button>` : ''}
+      ${e.summary ? `<button class="reflect-btn${ApsReflection.wasReflected(e) ? ' done' : ''}" onclick="openReflection(${globalIdx})"><span class="ring"></span>この日を振り返る</button>` : ''}
+    </div>` : hasDetail ? `
+    <button class="toggle-btn" onclick="toggleDetail(${globalIdx},this)">▶ 詳細を見る</button>` : ''}
     ${hasDetail ? `
-    <button class="toggle-btn" onclick="toggleDetail(${globalIdx},this)">▶ 詳細を見る</button>
     <div class="detail" id="detail-${globalIdx}">
       ${detailRows}${kwHtml}
     </div>` : ''}
   </div>
 </div>`;
+}
+
+// 振り返り機能は、オンにした端末だけに出す（試験運用。他の利用者の画面は今まで通り）。
+// オン: Timeline_Viewer.html#reflect=on を一度開く ／ オフ: #reflect=off
+const REFLECT_FLAG_KEY = 'aps_reflection_enabled';
+const REFLECT_ON = (() => {
+  try {
+    const m = location.hash.match(/reflect=(on|off)/);
+    if (m) {
+      if (m[1] === 'on') localStorage.setItem(REFLECT_FLAG_KEY, '1');
+      else localStorage.removeItem(REFLECT_FLAG_KEY);
+      history.replaceState(null, '', location.pathname + location.search);
+    }
+    return !!window.ApsReflection && localStorage.getItem(REFLECT_FLAG_KEY) === '1';
+  } catch (err) { return false; }
+})();
+
+// 振り返り（場面→一呼吸→一言→意味→声に出す）を全画面で開く。閉じたら一覧の印と「思い出す時期」を更新する。
+function openReflection(idx) {
+  if (!REFLECT_ON) return;
+  const e = allEntries[idx];
+  ApsReflection.open(e, { onClose: () => {
+    const btn = document.querySelector(`#entry-${idx} .reflect-btn`);
+    if (btn) btn.classList.toggle('done', ApsReflection.wasReflected(e));
+    renderDue();
+  } });
+}
+
+// 声に出せた振り返りは、1日後・3日後・1週間後・3週間後にもう一度ここに出す
+function renderDue() {
+  const box = document.getElementById('reflect-due');
+  if (!REFLECT_ON) { box.hidden = true; return; }
+  const due = ApsReflection.dueKeys()
+    .map(k => allEntries.findIndex(e => ApsReflection.keyOf(e) === k))
+    .filter(i => i >= 0);
+  if (!due.length) { box.hidden = true; return; }
+  const e = allEntries[due[0]];
+  box.innerHTML = `<button type="button" onclick="openReflection(${due[0]})">
+    <span>思い出す時期です</span>　${esc(e.date)} の振り返り${due.length > 1 ? `（ほか${due.length - 1}件）` : ''} ›</button>`;
+  box.hidden = false;
 }
 
 function toggleDetail(id, btn) {
