@@ -153,10 +153,12 @@
     } catch (err) { return false; }
   }
   // 思い出す時期が来た記録のキー一覧（古い順）
+  // 思い出す日は時刻ではなく日付で判断する（その日の朝から出す。GASの毎朝の通知と同じ考え方）
   function dueKeys() {
-    const log = loadLog(), now = Date.now();
+    const log = loadLog();
+    const endOfToday = new Date(); endOfToday.setHours(23, 59, 59, 999);
     return Object.entries(log)
-      .filter(([, r]) => r.dueAt && new Date(r.dueAt).getTime() <= now)
+      .filter(([, r]) => r.dueAt && new Date(r.dueAt).getTime() <= endOfToday.getTime())
       .sort((a, b) => new Date(a[1].dueAt) - new Date(b[1].dueAt))
       .map(([k]) => k);
   }
