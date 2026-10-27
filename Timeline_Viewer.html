@@ -440,10 +440,12 @@ function buildCard(e, animIdx, globalIdx) {
       ${pillHtml}
     </div>
     <div class="summary">${esc(e.summary)}</div>
+    ${REFLECT_ON ? `
     <div class="card-actions">
       ${hasDetail ? `<button class="toggle-btn" onclick="toggleDetail(${globalIdx},this)">▶ 詳細を見る</button>` : ''}
-      ${e.summary ? `<button class="reflect-btn${window.ApsReflection && ApsReflection.wasReflected(e) ? ' done' : ''}" onclick="openReflection(${globalIdx})"><span class="ring"></span>この日を振り返る</button>` : ''}
-    </div>
+      ${e.summary ? `<button class="reflect-btn${ApsReflection.wasReflected(e) ? ' done' : ''}" onclick="openReflection(${globalIdx})"><span class="ring"></span>この日を振り返る</button>` : ''}
+    </div>` : hasDetail ? `
+    <button class="toggle-btn" onclick="toggleDetail(${globalIdx},this)">▶ 詳細を見る</button>` : ''}
     ${hasDetail ? `
     <div class="detail" id="detail-${globalIdx}">
       ${detailRows}${kwHtml}
@@ -452,9 +454,24 @@ function buildCard(e, animIdx, globalIdx) {
 </div>`;
 }
 
+// 振り返り機能は、オンにした端末だけに出す（試験運用。他の利用者の画面は今まで通り）。
+// オン: Timeline_Viewer.html#reflect=on を一度開く ／ オフ: #reflect=off
+const REFLECT_FLAG_KEY = 'aps_reflection_enabled';
+const REFLECT_ON = (() => {
+  try {
+    const m = location.hash.match(/reflect=(on|off)/);
+    if (m) {
+      if (m[1] === 'on') localStorage.setItem(REFLECT_FLAG_KEY, '1');
+      else localStorage.removeItem(REFLECT_FLAG_KEY);
+      history.replaceState(null, '', location.pathname + location.search);
+    }
+    return !!window.ApsReflection && localStorage.getItem(REFLECT_FLAG_KEY) === '1';
+  } catch (err) { return false; }
+})();
+
 // 振り返り（場面→一呼吸→一言→意味→声に出す）を全画面で開く。閉じたら一覧の印と「思い出す時期」を更新する。
 function openReflection(idx) {
-  if (!window.ApsReflection) return;
+  if (!REFLECT_ON) return;
   const e = allEntries[idx];
   ApsReflection.open(e, { onClose: () => {
     const btn = document.querySelector(`#entry-${idx} .reflect-btn`);
@@ -466,7 +483,7 @@ function openReflection(idx) {
 // 声に出せた振り返りは、1日後・3日後・1週間後・3週間後にもう一度ここに出す
 function renderDue() {
   const box = document.getElementById('reflect-due');
-  if (!window.ApsReflection) { box.hidden = true; return; }
+  if (!REFLECT_ON) { box.hidden = true; return; }
   const due = ApsReflection.dueKeys()
     .map(k => allEntries.findIndex(e => ApsReflection.keyOf(e) === k))
     .filter(i => i >= 0);
