@@ -257,8 +257,9 @@
     document.head.appendChild(st);
   }
 
+  // 「ミルトンモデル：利用」「反論対処：逆説の例え（例外探し）」のように、どの体系の技法かを添える
   function techLine(ids) {
-    return ids.map(id => `<b>${esc(TECHNIQUES[id][0])}</b>`).join('・');
+    return ids.map(id => `${id.startsWith('SOM') ? '反論対処' : 'ミルトンモデル'}：<b>${esc(TECHNIQUES[id][0])}</b>`).join('　');
   }
 
   function bodyHtml() {
