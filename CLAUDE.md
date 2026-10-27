@@ -28,8 +28,18 @@ Google Apps Script（GAS）+ Gemini APIで動くAI伴走者チャット＆振り
 
 実装済みの範囲: ノードタップで開くボトムシート型モーダル、4部構成表示、heavinessに応じたCTA出し分け、localStorageによる実践ログ。
 2026-09-28 追加実装（本家GASのみ）: `I_MiniChapter.js` に `?page=mini_chapter`（生成＋`MiniChapter`シートへのキャッシュ）、`?page=assign_themes`（Unfinished Businessへ`theme_id`付与→`Theme_Index`シート）、`?page=prewarm_chapters` を追加。`timeline_data` の各エントリに `theme_id` / `occurrence_count`（同テーマが現れた週数）/ `days_open` / `heaviness` が載るようになり、フロントはそれを優先して使う。
-未実装: 公開用フォークへの移植、①想起エンジン（Chat.html側）。
+※2026-10-27確認: `I_MiniChapter.js`・`J_Recall.js`・heaviness付与は、公開版テンプレートと栗山さん用にもすでに入っている（下記「GASの置き場所」参照）。
 
-2026-10-27 追加: `reflection_stage.js`（振り返りステージの共通部品）。記録1件を「場面→一呼吸→一言→意味→声に出す」の全画面で体験し、ミルトンモデル19・スレイト・オブ・マウス16技法をエピソード記憶として覚える。`Timeline_Viewer.html` の各記録に「この日を振り返る」を付け、声に出せた振り返りは1日・3日・1週間・3週間後に「思い出す時期」として再表示する（記録は端末のlocalStorage `aps_reflection_log`）。一言は本家GASの `?page=reflection`（`I_Reflection.js`、未実装）で生成・キャッシュする前提で、無い間は技法の「型」で自分の一言をつくる練習になる。Synapse Graph・Chat.html（想起エンジン）からも `ApsReflection.open(entry)` で同じ部品を使う想定。
+2026-10-27 追加: `reflection_stage.js`（振り返りステージの共通部品）。記録1件を「場面→一呼吸→一言→意味→声に出す」の全画面で体験し、ミルトンモデル19・スレイト・オブ・マウス16技法をエピソード記憶として覚える。`Timeline_Viewer.html` の各記録に「この日を振り返る」を付け、声に出せた振り返りは1日・3日・1週間・3週間後に「思い出す時期」として再表示する（記録は端末のlocalStorage `aps_reflection_log`）。一言はGASの `?page=reflection`（`I_Reflection.js`）で生成し、各スプレッドシートの `Reflection` タブにキャッシュする。GASに入っていない間は、記録の「」の言葉を技法の型にはめた「たとえば」で練習する。振り返り機能は `Timeline_Viewer.html#reflect=on` を開いた端末だけに表示する（栗山さんなど他の利用者の画面は変えない）。Synapse Graph・Chat.html（想起エンジン）からも `ApsReflection.open(entry)` で同じ部品を使う想定。
+
+## GASの置き場所（2026-10-27確認）
+
+GASのソースはGitHubではなく、Google Driveの `AI_Partner_Sync_OS/…/gas_src/`（Macと同期・gitでローカル管理）にある。3つともclasp管理で、Rikkiのパソコンから `clasp push` する。
+
+- `ai_partner_sync_engine/` … 本家（Rikki本人のシート）
+- `ai_partner_sync_master_sheet_public/` … 公開版テンプレート（`AI_Partner_Sync_Master_Sheet_for_Public`、配布用の原本）
+- `kuri_master_sheet/` … 受講者・栗山さんのシート用（READMEに本番デプロイIDあり）。公開版を直したら、ここにも同じ修正が必要
+
+複数のGASへ同じ機能を入れる時は `gas_src/_updates/<日付>_<機能>/` に更新キットを置き、Rikkiが `node apply_*.mjs <対象>` で1つずつ反映する（例: `2026-10-28_reflection/`）。
 
 新しいセッションでこの続きに取り組む場合は、まず上記スペックドキュメントとPRを読むこと。
