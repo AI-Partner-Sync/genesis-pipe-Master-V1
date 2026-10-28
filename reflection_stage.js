@@ -380,7 +380,7 @@
       <section><h3>言い換えてみる</h3>${d.pairs.map(x => `<div class="pair"><small>${esc(x.scene)}</small>
         <div class="before">${esc(x.before)}</div><div class="after">${speak(x.after)}</div></div>`).join('')}</section>
       <section><h3>気をつけること</h3>${d.caution.map(t => `<p>${esc(t)}</p>`).join('')}</section>
-      <section><h3>練習　自分で言い換えてから、タップして見る</h3>${d.drills.map(x => `<details><summary>「${esc(x.q)}」を名詞にすると？</summary>
+      <section><h3>練習　自分で言い換えてから、タップして見る</h3>${d.drills.map(x => `<details><summary>「${esc(x.q)}」　${esc(d.drillAsk || 'この技法で返すと？')}</summary>
         <div class="after">${speak(x.a)}</div></details>`).join('')}</section>
       <p class="one">${speak(d.oneLine)}</p>`;
   }
