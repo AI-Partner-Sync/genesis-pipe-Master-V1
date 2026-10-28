@@ -42,4 +42,6 @@ GASのソースはGitHubではなく、Google Driveの `AI_Partner_Sync_OS/…/g
 
 複数のGASへ同じ機能を入れる時は `gas_src/_updates/<日付>_<機能>/` に更新キットを置き、Rikkiが `node apply_*.mjs <対象>` で1つずつ反映する（例: `2026-10-28_reflection/`）。
 
+振り返りステージ・思い出す時期の通知・デジタル知識脳の構想の仕様書（正本）は、Driveの `仕様書/GenesisPipe_振り返りステージ_デジタル知識脳_仕様書.md`。2026-10-28時点の未完了は、Discordの6人のQI（Macの `qi-bots.js`）がHQの頭脳APIで401になり返事できない件（仕様書8章）。
+
 新しいセッションでこの続きに取り組む場合は、まず上記スペックドキュメントとPRを読むこと。
