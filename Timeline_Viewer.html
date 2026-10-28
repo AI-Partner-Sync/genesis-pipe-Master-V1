@@ -475,27 +475,7 @@ window.addEventListener('hashchange', () => {
   if (/reflect=(on|off)/.test(location.hash)) location.reload();
 });
 
-// ホーム画面に追加したアプリにはアドレス欄がなく、保存場所もSafariとは別なので #reflect=on を開けない。
-// 左上の「AI Partner Sync」を素早く5回タップすると、この端末の振り返り機能をオン・オフできる（見た目は変わらない）。
-(() => {
-  const title = document.querySelector('header h1');
-  if (!title) return;
-  let taps = 0, timer = null;
-  title.addEventListener('click', () => {
-    taps += 1;
-    clearTimeout(timer);
-    timer = setTimeout(() => { taps = 0; }, 1500);
-    if (taps < 5) return;
-    taps = 0;
-    try {
-      const turnOn = localStorage.getItem(REFLECT_FLAG_KEY) !== '1';
-      if (turnOn) localStorage.setItem(REFLECT_FLAG_KEY, '1');
-      else localStorage.removeItem(REFLECT_FLAG_KEY);
-      title.textContent = turnOn ? '振り返り機能：オン' : '振り返り機能：オフ';
-      setTimeout(() => location.reload(), 900);
-    } catch (err) { /* 保存できない環境では何もしない */ }
-  });
-})();
+// ホーム画面に追加したアプリなど、アドレス欄がない時は、トップの ⚙️ 設定の「振り返り機能」でオン・オフする（index.html）。
 
 // 振り返り（場面→一呼吸→一言→意味→声に出す）を全画面で開く。閉じたら一覧の印と「思い出す時期」を更新する。
 function openReflection(idx) {
