@@ -79,6 +79,42 @@
     SOM06: ['「{q}」。10年後の自分から見たら、どんな一日に見える？', '10年後の自分から見たら、今日はどんな一日に見える？'],
   };
 
+  // 「たとえば」の中で、技法が働いている言葉（答え合わせ用の色付け）
+  const EXAMPLE_MARKS = {
+    MM19: ['その通り', 'だからこそ'],
+    SOM15: ['一度もなかった？', '例外は本当に一度もなかった？'],
+    SOM16: ['本当は何を守ろうとしている？'],
+    SOM11: ['自分の弱さではなく', '今の仕組みの無理'],
+    SOM12: ['本気で向き合ってきた証拠'],
+    SOM10: ['限界荷重を超えた機械'],
+    SOM14: ['本当は何を手に入れたい？'],
+    SOM13: ['具体的には'],
+    SOM09: ['仕組みを一つ変えたら'],
+    SOM07: ['今の自分にとって大切なこと'],
+    MM04: ['ということは'],
+    MM05: ['次は', 'この流れの先で'],
+    MM03: ['から', 'もっと軽くなる'],
+    MM07: ['いつでも思い出すことができる'],
+    MM08: ['この気づき', 'この日の気づき'],
+    MM02: ['良いことだ'],
+    SOM06: ['10年後の自分から見たら'],
+  };
+
+  // 技法ごとの色（色相）。35色を色相環に約10°おきに置き、同じ一言に並びやすい組み合わせ
+  // （前提と名詞化、例外探しと意図など）が80°以上離れるように割り当てた。
+  // 暗い背景の上で同じ明るさ・控えめな鮮やかさにそろえ、一言の中では文字の下の色線と、ごく淡い下地で示す。
+  const HUE = {
+    MM01: 278, MM02: 103, MM03: 41, MM04: 329, MM05: 144, MM06: 31, MM07: 319, MM08: 226, MM09: 206, MM10: 21,
+    MM11: 113, MM12: 339, MM13: 72, MM14: 175, MM15: 288, MM16: 257, MM17: 154, MM18: 195, MM19: 82,
+    SOM01: 134, SOM02: 123, SOM03: 10, SOM04: 298, SOM05: 309, SOM06: 216, SOM07: 247, SOM08: 165, SOM09: 62,
+    SOM10: 267, SOM11: 0, SOM12: 93, SOM13: 237, SOM14: 51, SOM15: 350, SOM16: 185,
+  };
+  function hueOf(id) { return HUE[id] ?? 40; }
+  function colorOf(id, alpha) { return `oklch(0.80 0.11 ${hueOf(id)}${alpha ? ' / ' + alpha : ''})`; }
+  function markVars(id) { return `--mk:${colorOf(id)};--mkbg:${colorOf(id, 0.13)}`; }
+  // それでも色が近い技法が同じ一言に並んだ時は、2つ目を点線にして見分けやすくする
+  function hueGap(a, b) { const d = Math.abs(hueOf(a) - hueOf(b)) % 360; return Math.min(d, 360 - d); }
+
   let state = null; // { entry, step, content, aiStatus }
   let root = null;
 
@@ -98,6 +134,65 @@
       .map(line => line.split(' ').map(w => `<span class="ph">${esc(w)}</span>`).join(' '))
       .join('<br>');
   }
+
+  // 技法が働いている部分に色を付けた一言。marks = [{ id, text, why }]（text は一言の中の文字列）。
+  // 見つからない text は無視する（色が無くても一言はそのまま読める）。返り値の used は、実際に色を付けた印。
+  function placeMarks(text, marks) {
+    const s = speakText(text);
+    const owner = new Array(s.length).fill(-1);
+    const used = [];
+    (marks || []).forEach(m => {
+      if (!m || !TECHNIQUES[m.id]) return;
+      const t = speakText(m.text);
+      if (!t) return;
+      let at = s.indexOf(t);
+      while (at >= 0 && owner.slice(at, at + t.length).some(o => o >= 0)) at = s.indexOf(t, at + 1);
+      if (at < 0) return;
+      const dotted = used.some(u => u.id !== m.id && hueGap(u.id, m.id) < 50);
+      const n = used.push({ id: m.id, text: t, why: m.why || '', dotted }) - 1;
+      for (let i = at; i < at + t.length; i++) owner[i] = n;
+    });
+    return { s, owner, used };
+  }
+  function markedSpeak(text, marks) {
+    const { s, owner, used } = placeMarks(text, marks);
+    if (!used.length) return speak(text);
+    let out = '', phrase = '', run = '', runOwner = -1;
+    const flushRun = () => {
+      if (!run) return;
+      if (runOwner < 0) phrase += esc(run);
+      else {
+        const u = used[runOwner];
+        phrase += `<span class="mk${u.dotted ? ' dotted' : ''}${run.length <= 8 ? ' nw' : ''}" data-mk="${runOwner}" style="${markVars(u.id)}">${esc(run)}</span>`;
+      }
+      run = '';
+    };
+    const flushPhrase = sep => { flushRun(); if (phrase) out += `<span class="ph">${phrase}</span>`; out += sep; phrase = ''; };
+    for (let i = 0; i < s.length; i++) {
+      const ch = s[i];
+      if (ch === ' ' || ch === '\n') { flushPhrase(ch === ' ' ? ' ' : '<br>'); runOwner = -1; continue; }
+      if (owner[i] !== runOwner) { flushRun(); runOwner = owner[i]; }
+      run += ch;
+    }
+    flushPhrase('');
+    return out;
+  }
+  // 一言の下に置く凡例。どの色がどの技法で、どの言葉かを一目で確かめられる。タップで「なぜそこか」が開く。
+  function markLegend(text, marks) {
+    const { used } = placeMarks(text, marks);
+    if (!used.length) return '';
+    // 同じ技法の言葉は1行にまとめる
+    const groups = [];
+    used.forEach(u => {
+      const g = groups.find(x => x.id === u.id);
+      if (g) { g.texts.push(u.text); g.why = g.why || u.why; } else groups.push({ id: u.id, texts: [u.text], why: u.why, dotted: u.dotted });
+    });
+    const open = state && state.mkOpen;
+    return `<div class="rf-marks rf-fade">${groups.map((g, i) => `<button type="button" class="mkl${g.dotted ? ' dotted' : ''}" data-rf="mk" data-i="${i}" style="${markVars(g.id)}" aria-expanded="${open === i}">
+        <i aria-hidden="true"></i>${g.id.startsWith('SOM') ? '反論対処' : 'ミルトンモデル'}：<b>${esc(TECHNIQUES[g.id][0])}</b>　${g.texts.map(t => `<q>${esc(t)}</q>`).join('')}${g.why ? '<span class="mkmore"> ›</span>' : ''}</button>
+        ${open === i && g.why ? `<p class="mkwhy">${esc(g.why)}</p>` : ''}`).join('')}</div>`;
+  }
+
 
   // 「この技法を学ぶ」の中身（technique_docs.js）は、開いた時に初めて読み込む
   const BASE = ((document.currentScript && document.currentScript.src) || '').replace(/[^/]*$/, '');
@@ -197,10 +292,10 @@
   // generate=false: 保存済みの一言を読むだけ（Gemini課金なし）。無ければ { status:'not_generated' }。
   // generate=true : 本人がボタンを押した時だけ。Geminiで作って保存する。
   // 通信エラーや、エンドポイントのない旧バージョンのGASでは null。
-  async function fetchReflection(e, generate) {
+  async function fetchReflection(e, generate, mark) {
     try {
       if (typeof apsLoadSettings !== 'function' || !apsLoadSettings().gasUrl) return null;
-      const res = await fetch(apsGasGetUrl(`page=reflection&level=${encodeURIComponent(e.level)}&date=${encodeURIComponent(e.date)}${generate ? '&generate=1' : ''}`));
+      const res = await fetch(apsGasGetUrl(`page=reflection&level=${encodeURIComponent(e.level)}&date=${encodeURIComponent(e.date)}${generate ? '&generate=1' : ''}${mark ? '&mark=1' : ''}`));
       if (!res.ok) return null;
       const data = await res.json();
       if (data && data.status === 'success' && data.reflection && data.reflection.said) return data;
@@ -253,6 +348,7 @@
       mean: r.mean || '',
       soft: r.soft || '',
       techniques: (r.techniques || []).filter(id => TECHNIQUES[id]),
+      marks: Array.isArray(r.marks) ? r.marks : [],
     };
   }
   // AIの一言がない時は、技法の「型」で自分の一言をつくる練習にする
@@ -270,6 +366,7 @@
       form, name, use, quote,
       example: quote ? ex[0].replace('{q}', quote) : ex[1],
       techniques: [id],
+      marks: (EXAMPLE_MARKS[id] || []).map(text => ({ id, text })),
     };
   }
 
@@ -306,6 +403,19 @@
 .aps-rf .ph{display:inline-block}
 .aps-rf .rf-learn-links{display:flex;flex-wrap:wrap;gap:6px 16px}
 .aps-rf .rf-learn-links .rf-link{color:var(--rf-gold);text-decoration:none;font-size:13px}
+.aps-rf .dot{display:inline-block;width:.55em;height:.55em;border-radius:50%;background:var(--mk);margin-right:.4em;vertical-align:.12em}
+.aps-rf .mk{background:var(--mkbg);text-decoration:underline 2px var(--mk);text-underline-offset:.3em;text-decoration-skip-ink:none;border-radius:3px;padding:0 .06em;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+.aps-rf .mk.nw{white-space:nowrap}
+.aps-rf .mk.dotted{text-decoration-style:dotted;text-decoration-thickness:3px}
+.aps-rf .rf-marks{display:flex;flex-direction:column;align-items:flex-start;gap:6px;margin-top:-4px}
+.aps-rf .rf-marks .mkl{font-size:13px;color:var(--rf-muted);text-align:left;line-height:1.6}
+.aps-rf .rf-marks .mkl i{display:inline-block;width:1.6em;height:0;border-bottom:2px solid var(--mk);margin-right:.6em;vertical-align:.3em}
+.aps-rf .rf-marks .mkl.dotted i{border-bottom:3px dotted var(--mk)}
+.aps-rf .rf-marks .mkl b{color:var(--mk);font-weight:600}
+.aps-rf .rf-marks .mkl q{color:var(--rf-ink)}
+.aps-rf .rf-marks .mkl q::before{content:'「'}.aps-rf .rf-marks .mkl q::after{content:'」'}
+.aps-rf .rf-marks .mkmore{color:var(--rf-muted)}
+.aps-rf .rf-marks .mkwhy{margin:0 0 4px 2.2em;font-size:13px;line-height:1.7;color:var(--rf-ink)}
 .aps-rf .rf-learnbox{flex:1;overflow-y:auto;max-width:34em;width:100%;margin:0 auto;padding:8px 0 48px;display:flex;flex-direction:column;gap:26px}
 .aps-rf .rf-learnbox h2{font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-size:30px;margin:4px 0 0;font-weight:700}
 .aps-rf .rf-learnbox h3{font-family:ui-monospace,Menlo,monospace;font-size:11px;letter-spacing:.14em;color:var(--rf-gold);margin:0 0 10px;font-weight:600}
@@ -357,7 +467,7 @@
   function learnLinks(ids) {
     if (!ids || !ids.length) return '';
     return `<div class="rf-learn-links rf-fade">${ids.map(id =>
-      `<button type="button" class="rf-link" data-rf="learn" data-id="${id}">${esc(TECHNIQUES[id][0])}を学ぶ ›</button>`).join('')}</div>`;
+      `<button type="button" class="rf-link" data-rf="learn" data-id="${id}" style="${markVars(id)}"><i class="dot" aria-hidden="true"></i>${esc(TECHNIQUES[id][0])}を学ぶ ›</button>`).join('')}</div>`;
   }
 
   // 技法を深く学ぶ画面。解説が無い技法は、名前・こんな時に・型だけを見せる
@@ -365,7 +475,7 @@
     const [name, use, form] = TECHNIQUES[id];
     const sys = id.startsWith('SOM') ? '反論対処（スレイト・オブ・マウス）' : 'ミルトンモデル';
     const d = (window.ApsTechniqueDocs || {})[id];
-    const head = `<div><h3>${esc(sys)}　${esc(id.replace(/^(MM|SOM)0?/, 'No.'))}</h3><h2>${esc(name)}</h2>
+    const head = `<div><h3>${esc(sys)}　${esc(id.replace(/^(MM|SOM)0?/, 'No.'))}</h3><h2><i class="dot" aria-hidden="true" style="${markVars(id)}"></i>${esc(name)}</h2>
       ${d ? `<p class="tag">${speak(d.tagline)}</p>` : ''}</div>`;
     if (!d) {
       return `${head}
@@ -400,12 +510,19 @@
     }
     if (name === 'said') {
       if (c.kind === 'ai') {
-        return `<p class="rf-slug rf-fade">${esc(slugOf(e))}</p><p class="rf-said rf-fade">${speak(c.said)}</p>${learnLinks(c.techniques)}`;
+        const canMark = !c.marks.length && state.marksSupported && aiStatus !== 'marking';
+        return `<p class="rf-slug rf-fade">${esc(slugOf(e))}</p><p class="rf-said rf-fade">${markedSpeak(c.said, c.marks)}</p>
+          ${markLegend(c.said, c.marks)}
+          ${canMark ? `<div class="rf-choice rf-fade"><button type="button" class="rf-link" data-rf="mark">どこに技法が使われているか、色で見る</button></div>` : ''}
+          ${aiStatus === 'marking' ? `<p class="rf-soft rf-fade">色を付けています…</p>` : ''}
+          ${aiStatus === 'mark_failed' ? `<p class="rf-soft rf-fade">色を付けられませんでした。時間をおいて、もう一度どうぞ。</p>` : ''}
+          ${learnLinks(c.techniques)}`;
       }
       const canMake = aiStatus === 'not_generated';
       return `<p class="rf-tech rf-fade">今日の技法　${techLine(c.techniques)}</p>
         ${c.quote ? `<p class="rf-quote rf-fade">この日のあなたの言葉　<b>「${esc(c.quote)}」</b></p>` : ''}
-        <p class="rf-said rf-fade">${speak(c.example || c.form)}</p>
+        <p class="rf-said rf-fade">${markedSpeak(c.example || c.form, c.marks)}</p>
+        ${markLegend(c.example || c.form, c.marks)}
         <p class="rf-form rf-fade">型：${esc(speakText(c.form))}<br>自分の言葉に言い換えても、このまま声に出してもいい。</p>
         ${learnLinks(c.techniques)}
         ${canMake ? `<div class="rf-choice rf-fade">
@@ -437,7 +554,7 @@
     // voice: 声に出す
     const heavy = e.heaviness === 'heavy';
     return `<p class="rf-slug rf-fade">声に出して、言ってみる</p>
-      <p class="rf-said rf-fade">${speak(c.kind === 'ai' ? c.said : (c.example || c.form))}</p>
+      <p class="rf-said rf-fade">${markedSpeak(c.kind === 'ai' ? c.said : (c.example || c.form), c.marks)}</p>
       <div class="rf-choice rf-fade">
         <button type="button" class="rf-pill main" data-rf="spoken">声に出せた</button>
         <button type="button" class="rf-link" data-rf="later">今日は心の中だけで</button>
@@ -455,7 +572,7 @@
       return;
     }
     const total = STEPS.length;
-    const still = STEPS[state.step] === 'voice' || (STEPS[state.step] === 'said' && state.aiStatus === 'making');
+    const still = STEPS[state.step] === 'voice' || (STEPS[state.step] === 'said' && (state.aiStatus === 'making' || state.aiStatus === 'marking'));
     const hint = STEPS[state.step] === 'ask' ? '言葉ができたら、タップ' : STEPS[state.step] === 'voice' ? '' : 'タップで次へ';
     root.innerHTML = `
       <div class="rf-bar"><button type="button" class="rf-x" data-rf="close" aria-label="振り返りを閉じる">×</button>
@@ -486,6 +603,23 @@
     render();
   }
 
+  // 前に保存した一言（色の印が無いもの）に、あとから色の印だけを付ける。Geminiを1回使い、印はシートに保存される。
+  async function markWithAi() {
+    const e = state.entry;
+    state.aiStatus = 'marking';
+    render();
+    const data = await fetchReflection(e, false, true);
+    if (!state || state.entry !== e) return;
+    const marks = data && data.status === 'success' && data.reflection && data.reflection.marks;
+    if (Array.isArray(marks) && marks.length) {
+      state.content = contentFromAi(e, data.reflection);
+      state.aiStatus = 'success';
+    } else {
+      state.aiStatus = 'mark_failed';
+    }
+    render();
+  }
+
   function close() {
     if (!state) return;
     const done = state.onClose;
@@ -502,6 +636,13 @@
     const act = t.dataset.rf;
     if (act === 'close') return close();
     if (act === 'make') { ev.stopPropagation(); return makeWithAi(); }
+    if (act === 'mark') { ev.stopPropagation(); return markWithAi(); }
+    if (act === 'mk') {
+      ev.stopPropagation();
+      const i = Number(t.dataset.i);
+      state.mkOpen = state.mkOpen === i ? null : i;
+      return render();
+    }
     if (act === 'learn') {
       ev.stopPropagation();
       const id = t.dataset.id;
@@ -515,7 +656,7 @@
     }
     if (act === 'stage') {
       if (ev.target.closest('a')) return;
-      if (STEPS[state.step] === 'voice' || state.aiStatus === 'making') return;
+      if (STEPS[state.step] === 'voice' || state.aiStatus === 'making' || state.aiStatus === 'marking') return;
       const r = t.getBoundingClientRect();
       go(ev.clientX < r.left + r.width * 0.25 ? -1 : 1);
     }
@@ -548,6 +689,8 @@
     // 保存済みの一言を読むだけ（課金なし）。場面を読んでいる間に届けば差し替える。
     const data = await fetchReflection(entry, false);
     if (!state || state.entry !== entry) return;
+    // 色の印に対応したGAS（I_Reflection.js 2026-10-29_reflection_marks 以降）なら marksSupported が付く
+    state.marksSupported = !!(data && data.marksSupported);
     if (data && data.status === 'success') {
       state.content = contentFromAi(entry, data.reflection);
       state.aiStatus = 'success';
