@@ -795,6 +795,16 @@ footer {
       <span class="slider-val" id="pitch-val">0.0</span>
     </div>
 
+    <div class="settings-section-title">🔁 振り返り機能（Timeline Viewer・試験運用）</div>
+    <div class="settings-toggle-row">
+      <label class="settings-label" for="settings-reflect-enabled" style="margin-bottom:0;">「この日を振り返る」を表示する</label>
+      <label class="tts-switch">
+        <input type="checkbox" id="settings-reflect-enabled">
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div class="settings-hint">この端末（このアプリ）だけの設定です。Safariとホーム画面のアプリは、それぞれで設定してください。</div>
+
     <div class="settings-btn-group">
       <button class="settings-btn-cancel" onclick="apsCloseSettings()">キャンセル</button>
       <button class="settings-btn-save" id="settings-save-btn" onclick="apsSaveSettingsFromModal()">保存する</button>
@@ -1044,6 +1054,19 @@ loadStats();
 /* ══════════════════════════════════════════
    設定モーダル
 ══════════════════════════════════════════ */
+// Timeline Viewer の振り返り機能のオン・オフ（Timeline_Viewer.html の REFLECT_FLAG_KEY と同じキー）。
+// 端末ごとの設定なので、settings.js の共通設定とは分けて保存する。
+const APS_REFLECT_FLAG_KEY = 'aps_reflection_enabled';
+function apsReflectionEnabled() {
+  try { return localStorage.getItem(APS_REFLECT_FLAG_KEY) === '1'; } catch (e) { return false; }
+}
+function apsSetReflectionEnabled(on) {
+  try {
+    if (on) localStorage.setItem(APS_REFLECT_FLAG_KEY, '1');
+    else localStorage.removeItem(APS_REFLECT_FLAG_KEY);
+  } catch (e) { /* 保存できない環境では何もしない */ }
+}
+
 function apsOpenSettings() {
   const s = apsLoadSettings();
   document.getElementById('settings-url-display').textContent = s.gasUrl;
@@ -1059,6 +1082,7 @@ function apsOpenSettings() {
   document.getElementById('settings-user-name').value = s.userName;
   document.getElementById('settings-ai-name').value   = s.aiName;
   document.getElementById('settings-tts-enabled').checked = s.ttsEnabled;
+  document.getElementById('settings-reflect-enabled').checked = apsReflectionEnabled();
   document.getElementById('settings-tts-voice').value = s.ttsVoice;
   document.getElementById('settings-tts-rate').value = s.ttsRate;
   document.getElementById('rate-val').textContent = parseFloat(s.ttsRate).toFixed(2);
@@ -1124,6 +1148,7 @@ function apsSaveSettingsFromModal() {
   if (urlEditOpen && urlInput) patch.gasUrl = urlInput;
   if (setup) Object.assign(patch, setup);
   const merged = apsSaveSettings(patch);
+  apsSetReflectionEnabled(document.getElementById('settings-reflect-enabled').checked);
   const btn = document.getElementById('settings-save-btn');
   btn.disabled = true;
   btn.textContent = '保存中…';
