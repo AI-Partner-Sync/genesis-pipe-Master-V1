@@ -145,12 +145,17 @@
       if (!m || !TECHNIQUES[m.id]) return;
       const t = speakText(m.text);
       if (!t) return;
+      // 他の印と重ならない場所を探す。どこも重なる時は、重なっていない文字だけに印を付ける
       let at = s.indexOf(t);
       while (at >= 0 && owner.slice(at, at + t.length).some(o => o >= 0)) at = s.indexOf(t, at + 1);
+      if (at < 0) {
+        at = s.indexOf(t);
+        while (at >= 0 && owner.slice(at, at + t.length).every(o => o >= 0)) at = s.indexOf(t, at + 1);
+      }
       if (at < 0) return;
       const dotted = used.some(u => u.id !== m.id && hueGap(u.id, m.id) < 50);
       const n = used.push({ id: m.id, text: t, why: m.why || '', dotted }) - 1;
-      for (let i = at; i < at + t.length; i++) owner[i] = n;
+      for (let i = at; i < at + t.length; i++) if (owner[i] < 0) owner[i] = n;
     });
     return { s, owner, used };
   }
@@ -177,22 +182,30 @@
     flushPhrase('');
     return out;
   }
-  // 一言の下に置く凡例。どの色がどの技法で、どの言葉かを一目で確かめられる。タップで「なぜそこか」が開く。
-  function markLegend(text, marks) {
-    const { used } = placeMarks(text, marks);
-    if (!used.length) return '';
-    // 同じ技法の言葉は1行にまとめる
-    const groups = [];
-    used.forEach(u => {
-      const g = groups.find(x => x.id === u.id);
-      if (g) { g.texts.push(u.text); g.why = g.why || u.why; } else groups.push({ id: u.id, texts: [u.text], why: u.why, dotted: u.dotted });
+  // 一言の下に置く凡例。宣言した技法ごとに1つずつ、色・該当の言葉・なぜその言葉がその技法か、を並べる。
+  // 2つ宣言したら2つとも必ず出す。印がまだ無い技法も黙って消さず、型を手がかりに探せるようにし、
+  // GASが対応していれば、その技法の場所だけを確かめ直せるボタンを添える。
+  function markLegend(c, text) {
+    const { used } = placeMarks(text, c.marks);
+    const ids = c.techniques.slice();
+    used.forEach(u => { if (ids.indexOf(u.id) < 0) ids.push(u.id); });
+    if (!ids.length) return '';
+    const rows = ids.map(id => {
+      const mine = used.filter(u => u.id === id);
+      const head = `<div class="mkl${mine.some(u => u.dotted) ? ' dotted' : ''}" style="${markVars(id)}">
+          <i aria-hidden="true"></i>${id.startsWith('SOM') ? '反論対処' : 'ミルトンモデル'}：<b>${esc(TECHNIQUES[id][0])}</b>　${mine.map(u => `<q>${esc(u.text)}</q>`).join('')}</div>`;
+      if (mine.length) {
+        const why = (mine.find(u => u.why) || {}).why;
+        return `${head}<p class="mkwhy">${why ? esc(why) : `型「${esc(speakText(TECHNIQUES[id][2]))}」が、ここで働いています。`}</p>`;
+      }
+      const canAsk = c.kind === 'ai' && state.marksSupported;
+      return `${head}<p class="mkwhy">ごめんなさい、この技法の場所はまだ印が付いていません。型「${esc(speakText(TECHNIQUES[id][2]))}」の形を、一言の中から探してみてください。</p>
+        ${canAsk && state.aiStatus !== 'marking' ? `<button type="button" class="rf-link mkask" data-rf="mark-more">「${esc(TECHNIQUES[id][0])}」の場所も確かめる</button>` : ''}`;
     });
-    const open = state && state.mkOpen;
-    return `<div class="rf-marks rf-fade">${groups.map((g, i) => `<button type="button" class="mkl${g.dotted ? ' dotted' : ''}" data-rf="mk" data-i="${i}" style="${markVars(g.id)}" aria-expanded="${open === i}">
-        <i aria-hidden="true"></i>${g.id.startsWith('SOM') ? '反論対処' : 'ミルトンモデル'}：<b>${esc(TECHNIQUES[g.id][0])}</b>　${g.texts.map(t => `<q>${esc(t)}</q>`).join('')}${g.why ? '<span class="mkmore"> ›</span>' : ''}</button>
-        ${open === i && g.why ? `<p class="mkwhy">${esc(g.why)}</p>` : ''}`).join('')}</div>`;
+    const busy = state.aiStatus === 'marking' ? `<p class="rf-soft">残りの技法の言葉を探しています…</p>` : '';
+    const failed = state.aiStatus === 'mark_failed' ? `<p class="rf-soft">ごめんなさい、今回も見つけられませんでした。少し時間をおいて、もう一度押してみてください。下の「学ぶ」で、この技法の言い換え例を先に見ておくこともできます。</p>` : '';
+    return `<div class="rf-marks rf-fade" data-rf="hold">${rows.join('')}${busy}${failed}</div>`;
   }
-
 
   // 「この技法を学ぶ」の中身（technique_docs.js）は、開いた時に初めて読み込む
   const BASE = ((document.currentScript && document.currentScript.src) || '').replace(/[^/]*$/, '');
@@ -416,8 +429,8 @@
 .aps-rf .rf-marks .mkl b{color:var(--mk);font-weight:600}
 .aps-rf .rf-marks .mkl q{color:var(--rf-ink)}
 .aps-rf .rf-marks .mkl q::before{content:'「'}.aps-rf .rf-marks .mkl q::after{content:'」'}
-.aps-rf .rf-marks .mkmore{color:var(--rf-muted)}
-.aps-rf .rf-marks .mkwhy{margin:0 0 4px 2.2em;font-size:13px;line-height:1.7;color:var(--rf-ink)}
+.aps-rf .rf-marks .mkask{font-size:13px;color:var(--rf-gold);margin:-2px 0 6px 2.2em}
+.aps-rf .rf-marks .mkwhy{margin:0 0 8px 2.2em;font-size:13px;line-height:1.7;color:var(--rf-ink)}
 .aps-rf .rf-learnbox{flex:1;overflow-y:auto;max-width:34em;width:100%;margin:0 auto;padding:8px 0 48px;display:flex;flex-direction:column;gap:26px}
 .aps-rf .rf-learnbox h2{font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-size:30px;margin:4px 0 0;font-weight:700}
 .aps-rf .rf-learnbox h3{font-family:ui-monospace,Menlo,monospace;font-size:11px;letter-spacing:.14em;color:var(--rf-gold);margin:0 0 10px;font-weight:600}
@@ -507,7 +520,7 @@
     return state.reveal && c.marks.length ? markedSpeak(text, c.marks) : speak(text);
   }
   function findHtml(c, text) {
-    if (state.reveal && c.marks.length) return markLegend(text, c.marks);
+    if (state.reveal && c.marks.length) return markLegend(c, text);
     if (state.aiStatus === 'marking') return `<p class="rf-soft rf-fade">一言の中から、技法が働いている言葉を探しています…</p>`;
     const failed = state.aiStatus === 'mark_failed'
       ? `<p class="rf-soft rf-fade">ごめんなさい、今回はうまく見つけられませんでした。少し時間をおいて、もう一度押してみてください。その間に、下の「学ぶ」で技法の表れ方を先に見ておくこともできます。</p>` : '';
@@ -635,7 +648,9 @@
     const data = await fetchReflection(e, false, true);
     if (!state || state.entry !== e) return;
     const marks = data && data.status === 'success' && data.reflection && data.reflection.marks;
-    if (Array.isArray(marks) && marks.length) {
+    const before = new Set((state.content.marks || []).map(m => m.id)).size;
+    const after = Array.isArray(marks) ? new Set(marks.map(m => m && m.id)).size : 0;
+    if (after > before) {
       state.content = contentFromAi(e, data.reflection);
       state.aiStatus = 'success';
       state.reveal = true;
@@ -666,12 +681,7 @@
       if (state.content.marks.length) { state.reveal = true; return render(); }
       return markWithAi();
     }
-    if (act === 'mk') {
-      ev.stopPropagation();
-      const i = Number(t.dataset.i);
-      state.mkOpen = state.mkOpen === i ? null : i;
-      return render();
-    }
+    if (act === 'mark-more') { ev.stopPropagation(); return markWithAi(); }
     if (act === 'learn') {
       ev.stopPropagation();
       const id = t.dataset.id;
