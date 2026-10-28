@@ -407,6 +407,8 @@
 .aps-rf .mk{background:var(--mkbg);text-decoration:underline 2px var(--mk);text-underline-offset:.3em;text-decoration-skip-ink:none;border-radius:3px;padding:0 .06em;-webkit-box-decoration-break:clone;box-decoration-break:clone}
 .aps-rf .mk.nw{white-space:nowrap}
 .aps-rf .mk.dotted{text-decoration-style:dotted;text-decoration-thickness:3px}
+.aps-rf .rf-find{display:flex;flex-direction:column;align-items:flex-start;gap:10px}
+.aps-rf .rf-find .rf-soft{margin:0}
 .aps-rf .rf-marks{display:flex;flex-direction:column;align-items:flex-start;gap:6px;margin-top:-4px}
 .aps-rf .rf-marks .mkl{font-size:13px;color:var(--rf-muted);text-align:left;line-height:1.6}
 .aps-rf .rf-marks .mkl i{display:inline-block;width:1.6em;height:0;border-bottom:2px solid var(--mk);margin-right:.6em;vertical-align:.3em}
@@ -495,6 +497,30 @@
       <p class="one">${speak(d.oneLine)}</p>`;
   }
 
+  // 一言の画面は「技法を宣言する → 自分で探す → 確かめる」の順に進む。
+  // 先に答えを見せず、探す時間を一度渡してから、色と理由で答え合わせをする。
+  function declareHtml(c) {
+    if (!c.techniques.length) return '';
+    return `<p class="rf-tech rf-fade">言葉巧みの技法　${techLine(c.techniques)}</p>`;
+  }
+  function saidHtml(c, text) {
+    return state.reveal && c.marks.length ? markedSpeak(text, c.marks) : speak(text);
+  }
+  function findHtml(c, text) {
+    if (state.reveal && c.marks.length) return markLegend(text, c.marks);
+    if (state.aiStatus === 'marking') return `<p class="rf-soft rf-fade">一言の中から、技法が働いている言葉を探しています…</p>`;
+    const failed = state.aiStatus === 'mark_failed'
+      ? `<p class="rf-soft rf-fade">ごめんなさい、今回はうまく見つけられませんでした。少し時間をおいて、もう一度押してみてください。その間に、下の「学ぶ」で技法の表れ方を先に見ておくこともできます。</p>` : '';
+    const fromGas = !c.marks.length; // 印がまだ無い一言は、GASに頼んで付ける
+    if (fromGas && !(c.kind === 'ai' && state.marksSupported)) return failed;
+    const known = c.techniques.length > 0;
+    return `<div class="rf-find rf-fade">
+        <p class="rf-soft">${known ? 'この一言のどこに使われているか、まず自分で探してみてください。' : 'この一言にどんな技法が使われているか、一緒に確かめましょう。'}</p>
+        <button type="button" class="rf-pill" data-rf="reveal">${known ? '使われている場所を確かめる' : '技法と、使われている場所を確かめる'}</button>
+        ${fromGas ? `<span class="rf-soft" style="font-size:12px">はじめての時だけGeminiを1回使います。結果は保存され、次からは無料です。</span>` : ''}
+      </div>${failed}`;
+  }
+
   function bodyHtml() {
     const { entry: e, content: c, step, aiStatus } = state;
     const name = STEPS[step];
@@ -510,19 +536,16 @@
     }
     if (name === 'said') {
       if (c.kind === 'ai') {
-        const canMark = !c.marks.length && state.marksSupported && aiStatus !== 'marking';
-        return `<p class="rf-slug rf-fade">${esc(slugOf(e))}</p><p class="rf-said rf-fade">${markedSpeak(c.said, c.marks)}</p>
-          ${markLegend(c.said, c.marks)}
-          ${canMark ? `<div class="rf-choice rf-fade"><button type="button" class="rf-link" data-rf="mark">どこに技法が使われているか、色で見る</button></div>` : ''}
-          ${aiStatus === 'marking' ? `<p class="rf-soft rf-fade">色を付けています…</p>` : ''}
-          ${aiStatus === 'mark_failed' ? `<p class="rf-soft rf-fade">色を付けられませんでした。時間をおいて、もう一度どうぞ。</p>` : ''}
+        return `<p class="rf-slug rf-fade">${esc(slugOf(e))}</p>${declareHtml(c)}
+          <p class="rf-said rf-fade">${saidHtml(c, c.said)}</p>
+          ${findHtml(c, c.said)}
           ${learnLinks(c.techniques)}`;
       }
       const canMake = aiStatus === 'not_generated';
-      return `<p class="rf-tech rf-fade">今日の技法　${techLine(c.techniques)}</p>
+      return `${declareHtml(c)}
         ${c.quote ? `<p class="rf-quote rf-fade">この日のあなたの言葉　<b>「${esc(c.quote)}」</b></p>` : ''}
-        <p class="rf-said rf-fade">${markedSpeak(c.example || c.form, c.marks)}</p>
-        ${markLegend(c.example || c.form, c.marks)}
+        <p class="rf-said rf-fade">${saidHtml(c, c.example || c.form)}</p>
+        ${findHtml(c, c.example || c.form)}
         <p class="rf-form rf-fade">型：${esc(speakText(c.form))}<br>自分の言葉に言い換えても、このまま声に出してもいい。</p>
         ${learnLinks(c.techniques)}
         ${canMake ? `<div class="rf-choice rf-fade">
@@ -535,7 +558,7 @@
       if (c.kind === 'ai') {
         return `<p class="rf-mean rf-fade">${esc(c.mean)}</p>
           ${c.soft ? `<p class="rf-soft rf-fade">${esc(c.soft)}</p>` : ''}
-          ${c.techniques.length ? `<p class="rf-tech rf-fade">使った技法　${techLine(c.techniques)}</p>${learnLinks(c.techniques)}` : ''}`;
+          ${c.techniques.length ? `<p class="rf-tech rf-fade">言葉巧みの技法　${techLine(c.techniques)}</p>${learnLinks(c.techniques)}` : ''}`;
       }
       return `<p class="rf-tech rf-fade">${techLine(c.techniques)}　こんな時に</p>
         <p class="rf-mean rf-fade">${esc(c.use)}</p>${learnLinks(c.techniques)}`;
@@ -554,7 +577,7 @@
     // voice: 声に出す
     const heavy = e.heaviness === 'heavy';
     return `<p class="rf-slug rf-fade">声に出して、言ってみる</p>
-      <p class="rf-said rf-fade">${markedSpeak(c.kind === 'ai' ? c.said : (c.example || c.form), c.marks)}</p>
+      <p class="rf-said rf-fade">${saidHtml(c, c.kind === 'ai' ? c.said : (c.example || c.form))}</p>
       <div class="rf-choice rf-fade">
         <button type="button" class="rf-pill main" data-rf="spoken">声に出せた</button>
         <button type="button" class="rf-link" data-rf="later">今日は心の中だけで</button>
@@ -603,7 +626,8 @@
     render();
   }
 
-  // 前に保存した一言（色の印が無いもの）に、あとから色の印だけを付ける。Geminiを1回使い、印はシートに保存される。
+  // 前に保存した一言（色の印が無いもの）に、あとから色の印を付ける。Geminiを1回使い、印はシートに保存される。
+  // 技法が空の一言は、GASが技法も見分けて返す。
   async function markWithAi() {
     const e = state.entry;
     state.aiStatus = 'marking';
@@ -614,6 +638,7 @@
     if (Array.isArray(marks) && marks.length) {
       state.content = contentFromAi(e, data.reflection);
       state.aiStatus = 'success';
+      state.reveal = true;
     } else {
       state.aiStatus = 'mark_failed';
     }
@@ -636,7 +661,11 @@
     const act = t.dataset.rf;
     if (act === 'close') return close();
     if (act === 'make') { ev.stopPropagation(); return makeWithAi(); }
-    if (act === 'mark') { ev.stopPropagation(); return markWithAi(); }
+    if (act === 'reveal') {
+      ev.stopPropagation();
+      if (state.content.marks.length) { state.reveal = true; return render(); }
+      return markWithAi();
+    }
     if (act === 'mk') {
       ev.stopPropagation();
       const i = Number(t.dataset.i);
