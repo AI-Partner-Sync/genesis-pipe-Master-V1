@@ -86,6 +86,34 @@
     return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
   function br(s) { return esc(s).replace(/\n/g, '<br>'); }
+
+  // 声に出す一言：実際の話し言葉に合わせて句読点（、。）を使わず、言葉の区切りを半角スペースで見せる。
+  // 区切りごとのまとまりは途中で折り返さない（.ph）ので、改行も言葉の切れ目で起きる。
+  function speakText(s) {
+    return String(s ?? '').replace(/[、。，．,]+/g, ' ').split('\n')
+      .map(l => l.replace(/[ 　]+/g, ' ').trim()).filter(Boolean).join('\n');
+  }
+  function speak(s) {
+    return speakText(s).split('\n')
+      .map(line => line.split(' ').map(w => `<span class="ph">${esc(w)}</span>`).join(' '))
+      .join('<br>');
+  }
+
+  // 「この技法を学ぶ」の中身（technique_docs.js）は、開いた時に初めて読み込む
+  const BASE = ((document.currentScript && document.currentScript.src) || '').replace(/[^/]*$/, '');
+  let docsLoading = null;
+  function ensureDocs() {
+    if (window.ApsTechniqueDocs) return Promise.resolve();
+    if (!docsLoading) {
+      docsLoading = new Promise(resolve => {
+        const sc = document.createElement('script');
+        sc.src = BASE + 'technique_docs.js';
+        sc.onload = sc.onerror = () => resolve();
+        document.head.appendChild(sc);
+      });
+    }
+    return docsLoading;
+  }
   function keyOf(e) { return (e.level || '') + '|' + (e.date || ''); }
   function hash(str) { let h = 0; for (const ch of String(str)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h; }
 
@@ -274,7 +302,26 @@
 .aps-rf .rf-ep span{display:block}
 .aps-rf .rf-ask{font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-weight:700;font-size:20px;text-align:center;margin:0}
 .aps-rf .rf-breath{width:96px;height:96px;border-radius:50%;background:var(--rf-glow);margin:8px auto;display:grid;place-items:center;font-size:12px;color:var(--rf-muted)}
-.aps-rf .rf-said{font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-weight:700;font-size:25px;line-height:1.9;margin:0}
+.aps-rf .rf-said{font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-weight:700;font-size:25px;line-height:1.9;margin:0;word-spacing:.35em}
+.aps-rf .ph{display:inline-block}
+.aps-rf .rf-learn-links{display:flex;flex-wrap:wrap;gap:6px 16px}
+.aps-rf .rf-learn-links .rf-link{color:var(--rf-gold);text-decoration:none;font-size:13px}
+.aps-rf .rf-learnbox{flex:1;overflow-y:auto;max-width:34em;width:100%;margin:0 auto;padding:8px 0 48px;display:flex;flex-direction:column;gap:26px}
+.aps-rf .rf-learnbox h2{font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-size:30px;margin:4px 0 0;font-weight:700}
+.aps-rf .rf-learnbox h3{font-family:ui-monospace,Menlo,monospace;font-size:11px;letter-spacing:.14em;color:var(--rf-gold);margin:0 0 10px;font-weight:600}
+.aps-rf .rf-learnbox p{margin:0 0 10px;font-size:15px;line-height:2}
+.aps-rf .rf-learnbox .tag{font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-size:21px;line-height:1.8;font-weight:500;word-spacing:.35em;margin:6px 0 0}
+.aps-rf .rf-learnbox .why b{display:block;font-size:15px;margin-bottom:2px}
+.aps-rf .rf-learnbox ol{margin:0;padding-left:1.4em;display:flex;flex-direction:column;gap:12px}
+.aps-rf .rf-learnbox li b{display:block}
+.aps-rf .rf-learnbox .pair{border-left:2px solid var(--rf-faint);padding:2px 0 2px 14px;margin-bottom:16px}
+.aps-rf .rf-learnbox .pair small{display:block;font-size:12px;color:var(--rf-muted)}
+.aps-rf .rf-learnbox .pair .before{color:var(--rf-muted);font-size:14px;text-decoration:line-through;text-decoration-color:rgba(124,133,151,.5)}
+.aps-rf .rf-learnbox .pair .after{font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-size:19px;font-weight:700;line-height:1.8;word-spacing:.35em}
+.aps-rf .rf-learnbox details{border:1px solid var(--rf-faint);border-radius:10px;padding:12px 14px;margin-bottom:10px}
+.aps-rf .rf-learnbox summary{cursor:pointer;font-size:15px}
+.aps-rf .rf-learnbox details .after{margin-top:8px;font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-size:18px;font-weight:700;word-spacing:.35em}
+.aps-rf .rf-learnbox .one{font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-size:20px;text-align:center;word-spacing:.35em;color:var(--rf-gold)}
 .aps-rf .rf-mean{font-size:16px;line-height:2;margin:0}
 .aps-rf .rf-soft{color:var(--rf-muted);font-size:14px;line-height:1.8;margin:0}
 .aps-rf .rf-tech{font-size:12px;color:var(--rf-muted);letter-spacing:.04em}
@@ -307,6 +354,37 @@
     return ids.map(id => `${id.startsWith('SOM') ? '反論対処' : 'ミルトンモデル'}：<b>${esc(TECHNIQUES[id][0])}</b>`).join('　');
   }
 
+  function learnLinks(ids) {
+    if (!ids || !ids.length) return '';
+    return `<div class="rf-learn-links rf-fade">${ids.map(id =>
+      `<button type="button" class="rf-link" data-rf="learn" data-id="${id}">${esc(TECHNIQUES[id][0])}を学ぶ ›</button>`).join('')}</div>`;
+  }
+
+  // 技法を深く学ぶ画面。解説が無い技法は、名前・こんな時に・型だけを見せる
+  function learnHtml(id) {
+    const [name, use, form] = TECHNIQUES[id];
+    const sys = id.startsWith('SOM') ? '反論対処（スレイト・オブ・マウス）' : 'ミルトンモデル';
+    const d = (window.ApsTechniqueDocs || {})[id];
+    const head = `<div><h3>${esc(sys)}　${esc(id.replace(/^(MM|SOM)0?/, 'No.'))}</h3><h2>${esc(name)}</h2>
+      ${d ? `<p class="tag">${speak(d.tagline)}</p>` : ''}</div>`;
+    if (!d) {
+      return `${head}
+        <section><h3>こんな時に</h3><p>${esc(use)}</p></section>
+        <section><h3>型</h3><p class="tag">${speak(form)}</p></section>
+        <p class="rf-soft">詳しい解説は、順に追加していきます。</p>`;
+    }
+    return `${head}
+      <section><h3>どんな技法か</h3>${d.what.map(t => `<p>${esc(t)}</p>`).join('')}</section>
+      <section class="why"><h3>なぜ言葉が届くのか</h3>${d.why.map(w => `<p><b>${esc(w.h)}</b>${esc(w.p)}</p>`).join('')}</section>
+      <section><h3>自分で使う3つのステップ</h3><ol>${d.steps.map(x => `<li><b>${esc(x.h)}</b>${esc(x.p)}</li>`).join('')}</ol></section>
+      <section><h3>言い換えてみる</h3>${d.pairs.map(x => `<div class="pair"><small>${esc(x.scene)}</small>
+        <div class="before">${esc(x.before)}</div><div class="after">${speak(x.after)}</div></div>`).join('')}</section>
+      <section><h3>気をつけること</h3>${d.caution.map(t => `<p>${esc(t)}</p>`).join('')}</section>
+      <section><h3>練習　自分で言い換えてから、タップして見る</h3>${d.drills.map(x => `<details><summary>「${esc(x.q)}」を名詞にすると？</summary>
+        <div class="after">${speak(x.a)}</div></details>`).join('')}</section>
+      <p class="one">${speak(d.oneLine)}</p>`;
+  }
+
   function bodyHtml() {
     const { entry: e, content: c, step, aiStatus } = state;
     const name = STEPS[step];
@@ -322,13 +400,14 @@
     }
     if (name === 'said') {
       if (c.kind === 'ai') {
-        return `<p class="rf-slug rf-fade">${esc(slugOf(e))}</p><p class="rf-said rf-fade">${br(c.said)}</p>`;
+        return `<p class="rf-slug rf-fade">${esc(slugOf(e))}</p><p class="rf-said rf-fade">${speak(c.said)}</p>${learnLinks(c.techniques)}`;
       }
       const canMake = aiStatus === 'not_generated';
       return `<p class="rf-tech rf-fade">今日の技法　${techLine(c.techniques)}</p>
         ${c.quote ? `<p class="rf-quote rf-fade">この日のあなたの言葉　<b>「${esc(c.quote)}」</b></p>` : ''}
-        <p class="rf-said rf-fade">${esc(c.example || c.form)}</p>
-        <p class="rf-form rf-fade">型：${esc(c.form)}<br>自分の言葉に言い換えても、このまま声に出してもいい。</p>
+        <p class="rf-said rf-fade">${speak(c.example || c.form)}</p>
+        <p class="rf-form rf-fade">型：${esc(speakText(c.form))}<br>自分の言葉に言い換えても、このまま声に出してもいい。</p>
+        ${learnLinks(c.techniques)}
         ${canMake ? `<div class="rf-choice rf-fade">
           <button type="button" class="rf-pill" data-rf="make">この日の一言をAIと一緒につくる</button>
           <span class="rf-soft" style="font-size:12px">Geminiを1回使います。一度つくると保存され、次からは無料で開けます。</span></div>` : ''}
@@ -339,10 +418,10 @@
       if (c.kind === 'ai') {
         return `<p class="rf-mean rf-fade">${esc(c.mean)}</p>
           ${c.soft ? `<p class="rf-soft rf-fade">${esc(c.soft)}</p>` : ''}
-          ${c.techniques.length ? `<p class="rf-tech rf-fade">使った技法　${techLine(c.techniques)}</p>` : ''}`;
+          ${c.techniques.length ? `<p class="rf-tech rf-fade">使った技法　${techLine(c.techniques)}</p>${learnLinks(c.techniques)}` : ''}`;
       }
       return `<p class="rf-tech rf-fade">${techLine(c.techniques)}　こんな時に</p>
-        <p class="rf-mean rf-fade">${esc(c.use)}</p>`;
+        <p class="rf-mean rf-fade">${esc(c.use)}</p>${learnLinks(c.techniques)}`;
     }
     if (state.done) {
       const r = state.done;
@@ -358,7 +437,7 @@
     // voice: 声に出す
     const heavy = e.heaviness === 'heavy';
     return `<p class="rf-slug rf-fade">声に出して、言ってみる</p>
-      <p class="rf-said rf-fade">${c.kind === 'ai' ? br(c.said) : esc(c.example || c.form)}</p>
+      <p class="rf-said rf-fade">${speak(c.kind === 'ai' ? c.said : (c.example || c.form))}</p>
       <div class="rf-choice rf-fade">
         <button type="button" class="rf-pill main" data-rf="spoken">声に出せた</button>
         <button type="button" class="rf-link" data-rf="later">今日は心の中だけで</button>
@@ -368,6 +447,13 @@
   }
 
   function render() {
+    if (state.learn) {
+      root.innerHTML = `
+        <div class="rf-bar"><button type="button" class="rf-link" data-rf="learn-close" style="text-decoration:none">← 振り返りに戻る</button></div>
+        <div class="rf-learnbox">${learnHtml(state.learn)}
+          <div class="rf-choice"><button type="button" class="rf-pill" data-rf="learn-close">振り返りに戻る</button></div></div>`;
+      return;
+    }
     const total = STEPS.length;
     const still = STEPS[state.step] === 'voice' || (STEPS[state.step] === 'said' && state.aiStatus === 'making');
     const hint = STEPS[state.step] === 'ask' ? '言葉ができたら、タップ' : STEPS[state.step] === 'voice' ? '' : 'タップで次へ';
@@ -416,6 +502,12 @@
     const act = t.dataset.rf;
     if (act === 'close') return close();
     if (act === 'make') { ev.stopPropagation(); return makeWithAi(); }
+    if (act === 'learn') {
+      ev.stopPropagation();
+      const id = t.dataset.id;
+      return ensureDocs().then(() => { if (state) { state.learn = id; render(); } });
+    }
+    if (act === 'learn-close') { state.learn = null; return render(); }
     if (act === 'spoken' || act === 'later') {
       state.doneSpoken = act === 'spoken';
       state.done = record(state.entry, state.doneSpoken);
@@ -431,6 +523,7 @@
 
   function onKey(ev) {
     if (!state) return;
+    if (state.learn) { if (ev.key === 'Escape') { state.learn = null; render(); } return; }
     if (ev.key === 'Escape') close();
     else if (ev.key === 'ArrowLeft') go(-1);
     else if ((ev.key === 'ArrowRight' || ev.key === ' ') && STEPS[state.step] !== 'voice') { ev.preventDefault(); go(1); }
