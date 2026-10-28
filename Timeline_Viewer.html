@@ -469,6 +469,11 @@ const REFLECT_ON = (() => {
     return !!window.ApsReflection && localStorage.getItem(REFLECT_FLAG_KEY) === '1';
   } catch (err) { return false; }
 })();
+// 開いたままのページで、アドレスの末尾に #reflect=on / off を足した時はページが読み込み直されないので、
+// ここで読み込み直して切り替えを反映する（iPhoneのSafari・Chromeで起きやすい）
+window.addEventListener('hashchange', () => {
+  if (/reflect=(on|off)/.test(location.hash)) location.reload();
+});
 
 // 振り返り（場面→一呼吸→一言→意味→声に出す）を全画面で開く。閉じたら一覧の印と「思い出す時期」を更新する。
 function openReflection(idx) {
