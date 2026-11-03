@@ -7,6 +7,9 @@
 // 前提: settings.js（apsLoadSettings / apsGasGetUrl / apsGasPostBody / apsIsUnauthorized）が読み込み済みであること。
 // v1.1 (2026-11-03): 対話パネルをiOS風ガラス（すりガラス）表現に。返事入力にマイク音声入力を追加
 //   （Chat.html の toggleRecording と同じ Web Speech API 方式。体験フロー・文案は v1 のまま）。
+// v1.2 (2026-11-03): 「この対話を保存」ボタンを追加（オーナー決定：A案）。
+//   保存は Chat.html の save プロトコルをそのまま流用し、チャット保存として残す。
+//   Reflection_Log には書かない（「この日を振り返る」＝稽古の記録との役割分担を維持するため）。
 (function () {
   const FLAG_KEY = 'aps_avatar_enabled';
 
@@ -174,6 +177,12 @@
 .aps-av-send{background:#f59e0b;border:0;color:#0a0f1e;font-weight:700;border-radius:10px;padding:0 18px;font-size:13px;cursor:pointer}
 .aps-av-send[disabled]{opacity:.5;cursor:default}
 .aps-av-note{font-size:11px;color:#64748b;line-height:1.7;padding-top:8px}
+.aps-av-saverow{display:none;align-items:center;gap:10px;padding-top:10px}
+.aps-av-saverow.show{display:flex}
+.aps-av-save{border:1px solid rgba(245,158,11,.55);background:rgba(245,158,11,.08);color:#ffd97a;border-radius:999px;
+  padding:7px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
+.aps-av-save[disabled]{opacity:.45;cursor:default}
+.aps-av-savestate{font-size:11px;color:#94a3b8}
 .aps-av-mic{flex:0 0 auto;width:42px;height:42px;border-radius:50%;background:#1e293b;border:1px solid #334155;color:#f59e0b;
   cursor:pointer;display:grid;place-items:center;padding:0;-webkit-tap-highlight-color:transparent}
 .aps-av-mic .material-icons{font-size:20px;line-height:1}
@@ -192,6 +201,7 @@
   .aps-av-input textarea:focus{border-color:#f59e0b}
   .aps-av-mic{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.18)}
   .aps-av-mic.recording{background:rgba(239,68,68,.85);border-color:transparent}
+  .aps-av-save{background:rgba(255,255,255,.08);border-color:rgba(245,158,11,.45)}
   .aps-av{background:radial-gradient(circle at 32% 28%,rgba(245,158,11,.28),rgba(21,32,58,.55) 62%);
     -webkit-backdrop-filter:blur(10px) saturate(160%);backdrop-filter:blur(10px) saturate(160%)}
   .aps-av-dot{background:radial-gradient(circle at 32% 28%,rgba(245,158,11,.28),rgba(21,32,58,.55) 62%);
@@ -205,7 +215,11 @@
   }
 
   // ── 状態 ──
-  const state = { open: false, candidates: [], candIdx: 0, started: false, history: '', recallUsed: false, busy: false };
+  const state = {
+    open: false, candidates: [], candIdx: 0, started: false, history: '', recallUsed: false, busy: false,
+    // 保存（A案）用：ctx=文脈ヘッダの材料、turns=完了した往復数、savedTurns/savedLen=保存済みの境界、saving=送信中
+    ctx: null, turns: 0, savedTurns: 0, savedLen: 0, saving: false,
+  };
   let circleEl = null, panelEl = null;
 
   function nameFontSize(name) {
@@ -256,6 +270,10 @@
     const html = `${esc(o.lead)}<div class="aps-av-quote">${esc(o.quote)}</div>${esc(o.ask)}`;
     addMsg('ai', html);
     state.history = `[${aiName()}]: ${o.lead}「${o.quote}」${o.ask}\n`;
+    // 新しい出会いごとに保存状態も仕切り直す（前回分の二重保存を防ぐ）
+    state.ctx = { date: cand.entry.date || '', quote: o.quote, ask: o.ask };
+    state.turns = 0; state.savedTurns = 0; state.savedLen = 0; state.saving = false;
+    refreshSaveBtn();
     // 招きの選択肢（常時見える場所に、断る自由と一緒に）
     const start = document.createElement('button');
     start.type = 'button'; start.className = 'aps-av-pill'; start.textContent = '言葉を返してみる';
@@ -278,6 +296,83 @@
         renderOpening();
       });
       choices.appendChild(other);
+    }
+  }
+
+  // ── 保存ボタン（A案：Chat.html と同じ save プロトコルで、チャット保存として残す） ──
+  function saveRow() { return panelEl ? panelEl.querySelector('.aps-av-saverow') : null; }
+  function saveBtn() { return panelEl ? panelEl.querySelector('.aps-av-save') : null; }
+  function saveStateEl() { return panelEl ? panelEl.querySelector('.aps-av-savestate') : null; }
+
+  // 状態遷移：往復ゼロ→行ごと隠す／未保存の往復あり→押せる／保存中→無効／全部保存済み→「保存済み」で無効
+  function refreshSaveBtn() {
+    const row = saveRow(), btn = saveBtn(), st = saveStateEl();
+    if (!row || !btn) return;
+    if (state.turns === 0) { row.classList.remove('show'); return; }
+    row.classList.add('show');
+    if (state.saving) {
+      btn.disabled = true; btn.textContent = '保存しています…';
+      if (st) st.textContent = '';
+    } else if (state.turns > state.savedTurns) {
+      btn.disabled = !!state.busy;
+      btn.textContent = state.savedTurns === 0 ? 'この対話を保存' : '続きを保存';
+      if (st) st.textContent = '';
+    } else {
+      btn.disabled = true; btn.textContent = '保存済み';
+      if (st) st.textContent = 'いつものチャットの記録に残っています';
+    }
+  }
+
+  // 保存内容：先頭に文脈（いつの記録か／引用した本人の言葉／最初の問い）を付け、
+  // 続けて未保存分の対話全文を、チャットと同じ [話者]: 形式で並べる。
+  function buildSaveText() {
+    const ctx = state.ctx || {};
+    const head = [
+      '【浮遊アバターでの対話】',
+      '対象の記録：' + (ctx.date || ''),
+      'あの日の言葉：「' + (ctx.quote || '') + '」',
+      '最初の問い：' + (ctx.ask || ''),
+      '───',
+      '',
+    ].join('\n');
+    return head + state.history.slice(state.savedLen);
+  }
+
+  async function onSaveConversation() {
+    if (state.saving || state.turns <= state.savedTurns) return;
+    const s = settings();
+    if (!s.gasUrl) {
+      // 未連携では保存できない。成功したふりはしない。
+      addMsg('sys', '保存にはいつもの連携（スプレッドシート連携）が必要です。連携した状態で、もう一度お試しください。');
+      return;
+    }
+    state.saving = true;
+    refreshSaveBtn();
+    const snapshotLen = state.history.length;
+    try {
+      // Chat.html の saveConversationLog と同一の送信方法・ペイロード
+      const res = await fetch(s.gasUrl, {
+        method: 'POST',
+        redirect: 'follow',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: apsGasPostBody({ type: 'save', fullText: buildSaveText(), aiName: aiName() }),
+      });
+      const data = await res.json();
+      if (apsIsUnauthorized(data)) {
+        addMsg('sys', APS_UNAUTHORIZED_MESSAGE);
+      } else if (data && data.status === 'success') {
+        state.savedLen = snapshotLen;
+        state.savedTurns = state.turns;
+        addMsg('sys', '保存しました');
+        if (data.oracle) addMsg('ai', esc(data.oracle));
+      } else {
+        addMsg('sys', '保存に失敗しました：' + (data && data.message ? data.message : '不明なエラー'));
+      }
+    } catch (err) {
+      addMsg('sys', '通信エラーが発生しました。接続を確認してください。');
+    } finally {
+      state.saving = false;
+      refreshSaveBtn();
     }
   }
 
@@ -304,12 +399,17 @@
           <textarea rows="2" placeholder="あの日の自分へ、言葉を返す" aria-label="返事を書く"></textarea>
           <button type="button" class="aps-av-send">送る</button>
         </div>
+        <div class="aps-av-saverow">
+          <button type="button" class="aps-av-save">この対話を保存</button>
+          <span class="aps-av-savestate"></span>
+        </div>
         <div class="aps-av-note">ここでの対話は、あなたの記録をもとに${esc(name)}が応えます。送信した内容は、いつものチャットと同じように扱われます。</div>
       </div>`;
     document.body.appendChild(panelEl);
     panelEl.querySelector('.aps-av-x').addEventListener('click', closePanel);
     panelEl.addEventListener('click', e => { if (e.target === panelEl) closePanel(); });
     panelEl.querySelector('.aps-av-send').addEventListener('click', onSend);
+    panelEl.querySelector('.aps-av-save').addEventListener('click', onSaveConversation);
     panelEl.querySelector('.aps-av-mic').addEventListener('click', toggleAvatarRecording);
     setupAvatarMic();
     panelEl.querySelector('textarea').addEventListener('keydown', e => {
@@ -370,12 +470,14 @@
       if (data && data.recalled) state.recallUsed = true;
       addMsg('ai', esc(reply));
       state.history += `[${aiName()}]: ${reply}\n`;
+      state.turns += 1; // 1往復が完了したので、保存できるようになる
     } catch (err) {
       typing.remove();
       addMsg('sys', '通信エラーが発生しました。接続を確認してください。');
     } finally {
       state.busy = false;
       if (sendBtn) sendBtn.disabled = false;
+      refreshSaveBtn();
     }
   }
 
