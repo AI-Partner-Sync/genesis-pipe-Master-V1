@@ -16,9 +16,14 @@
 //   問いの言い回しを種類ごとに複数用意して抽選する。データ読み込み完了時、その日はじめての1回だけ、
 //   パネルがふわっと自動で開く（閉じたらその日は二度と勝手に開かない。候補が無い静かな日は開かない）。
 //   AI名は円いっぱいに大きく（長い名前は二行）、サークルは名前の長さで最大68pxまで広げる。
+// v1.4 (2026-11-03): 選出の主軸を「感情の動き」に変える（オーナー実機フィードバック：差し出される記録が思い出せない）。
+//   感情ピーク（頂点＝score>=500／谷＝score<350、既存コードのスコア帯に準拠）を主軸候補にし、
+//   最後に差し出した極性を端末に覚えて、次回は反対の極性を当たりやすくする（ネガとポジの交互）。
+//   第一声には、その日の感情を本人の記録のラベルそのままで事実として添える。
 (function () {
   const FLAG_KEY = 'aps_avatar_enabled';
   const AUTO_OPEN_KEY = 'aps_avatar_auto_open_date'; // 1日1回だけ自動で開くための実施日
+  const POLARITY_KEY = 'aps_avatar_last_polarity'; // 最後に差し出した候補の極性（'pos'/'neg'。交互ルール用）
   const POOL_MAX = 10; // 抽選プールの上限（候補リストの上位から）
 
   // ── フラグ判定（reflection_stage の REFLECT_ON と同じ書き方） ──
@@ -62,8 +67,34 @@
   }
   function dateOf(e) { const d = new Date(e.date); return isNaN(d) ? null : d; }
 
-  // 候補リストを作る。優先順位: 直近の重い言葉 → 繰り返される言葉 → 直近の言葉 → 最新の記録。
-  // まだ振り返っていない日を先に並べ、出会いの重複を避ける。
+  // ── 感情の極性（v1.4） ──
+  // 閾値は新しく作らず、既存コードのスコア帯に寄せる：
+  //   頂点（pos）= score >= 500 … Timeline の感情ピル最上位帯／アークの色分け／reflection の技法プール最上位と同じ境界。
+  //   谷（neg）  = score < 350  … pickQuote が「スコアが低い日」に使う境界であり、v1 の heavy の定義そのもの。
+  //              スコアで決まらない日は、reflection が「重みのある日」の印に使う heaviness === 'heavy' も谷とみなす。
+  //   中立（neu）= 350〜499、または判定材料が無い日。交互の流れには関与しない。
+  function polarityOf(e) {
+    if (!e) return 'neu';
+    const s = e.score;
+    if (s && s >= 500) return 'pos';
+    if (s && s < 350) return 'neg';
+    if (e.heaviness === 'heavy') return 'neg';
+    return 'neu';
+  }
+  // 最後に差し出した極性を端末に覚える（セッションをまたいで交互を続けるため）。
+  function lastPolarity() {
+    try {
+      const v = localStorage.getItem(POLARITY_KEY);
+      return (v === 'pos' || v === 'neg') ? v : null;
+    } catch (err) { return null; }
+  }
+  function rememberPolarity(p) {
+    if (p !== 'pos' && p !== 'neg') return; // 中立は流れを壊さない（覚えない）
+    try { localStorage.setItem(POLARITY_KEY, p); } catch (err) { /* 覚えられなくても出会いは成立させる */ }
+  }
+
+  // 候補リストを作る。主軸は「感情ピーク」（頂点と谷の両極）、補助に繰り返される言葉 → 直近の言葉 → 最新の記録。
+  // すべての候補に、その日の極性（polarityOf）を持たせる（交互ルールと抽選の重み付けに使う）。
   function buildCandidates(entries) {
     const dailies = entries.filter(e => e && e.level === 'Daily' && (e.summary || e.keystone));
     if (!dailies.length) return [];
@@ -71,13 +102,33 @@
     const fresh = arr => [...arr.filter(e => !wasReflected(e)), ...arr.filter(e => wasReflected(e))];
     const out = [];
     const push = (entry, kind, extra) => {
-      if (entry && !out.some(o => o.entry === entry)) out.push(Object.assign({ entry, kind }, extra || {}));
+      if (entry && !out.some(o => o.entry === entry))
+        out.push(Object.assign({ entry, kind, polarity: polarityOf(entry) }, extra || {}));
     };
-    // 1) 直近30日・スコア<350・引用あり
-    const since = Date.now() - 30 * 86400000;
-    const heavy = dailies.filter(e => e.score && e.score < 350 && pickQuote(e) && dateOf(e) && dateOf(e).getTime() >= since);
-    fresh(byNew(heavy)).forEach(e => push(e, 'heavy'));
-    // 2) キーワードが3件以上に繰り返される
+    // 1) 感情ピーク（v1.4 の主軸）：引用が取れる Daily のうち、感情が大きく動いた日。
+    //    谷はスコアの低い順（いちばん深い谷から）、頂点は高い順（いちばん高い頂点から）に並べ、
+    //    両極を交互に並べる（プールの上限で片方の極性だけが残る事故を防ぐ）。
+    //    並びの先頭は、前回と反対の極性から（交互の流れをプールの形からも作る）。
+    //    v1 の heavy（直近30日・score<350）は、谷側としてこのピークに統合した（期限は設けない。
+    //    感情が動いた日は、古くても「思い出せる日」であり、出会いの材料として鮮度より深さを取る）。
+    const peaksPos = [], peaksNeg = [];
+    dailies.filter(e => pickQuote(e)).forEach(e => {
+      const p = polarityOf(e);
+      if (p === 'pos') peaksPos.push(e);
+      else if (p === 'neg') peaksNeg.push(e);
+    });
+    peaksPos.sort((a, b) => ((b.score || 0) - (a.score || 0)) || ((dateOf(b) || 0) - (dateOf(a) || 0)));
+    peaksNeg.sort((a, b) => ((a.score || 999) - (b.score || 999)) || ((dateOf(b) || 0) - (dateOf(a) || 0)));
+    const startNeg = lastPolarity() !== 'neg'; // 前回が谷なら頂点から、それ以外は谷から
+    const sideA = startNeg ? peaksNeg : peaksPos;
+    const sideB = startNeg ? peaksPos : peaksNeg;
+    let peakCount = 0;
+    for (let i = 0; peakCount < 8 && (i < sideA.length || i < sideB.length); i++) {
+      if (i < sideA.length) { push(sideA[i], 'peak'); peakCount++; }
+      if (peakCount >= 8) break;
+      if (i < sideB.length) { push(sideB[i], 'peak'); peakCount++; }
+    }
+    // 2) キーワードが3件以上に繰り返される（補助）
     const counts = {};
     dailies.forEach(e => String(e.keywords || '').split(/[,\s　]+/).filter(Boolean)
       .forEach(k => { counts[k] = (counts[k] || 0) + 1; }));
@@ -86,39 +137,52 @@
       const withKw = dailies.filter(e => String(e.keywords || '').includes(kw) && pickQuote(e));
       fresh(byNew(withKw)).slice(0, 2).forEach(e => push(e, 'repeat', { keyword: kw, count: counts[kw] }));
     });
-    // 3) 引用が取れる直近の Daily
+    // 3) 引用が取れる直近の Daily（補助）
     fresh(byNew(dailies.filter(e => pickQuote(e)))).slice(0, 3).forEach(e => push(e, 'recent'));
     // 4) 最新の Daily（引用なしでも記録として）
     byNew(dailies).slice(0, 1).forEach(e => push(e, 'fallback'));
     return out;
   }
 
-  // ── 候補の抽選（v1.3） ──
+  // ── 候補の抽選（v1.3 → v1.4） ──
   // 開くたびに同じ顔が出るのをやめ、プールから1件を重み付きで引く。
-  // 重み：heavy（重い日）と repeat（繰り返しの言葉）を当たりやすくし、
+  // 重み：感情ピーク（peak）を最も当たりやすくし、補助（repeat / recent / fallback）は下げる。
   // すでに「この日を振り返る」を済ませた日は当たりにくくする。
   // 直前に見せた記録は次の抽選から外し、連続して同じ出会いにならないようにする。
-  function candWeight(c) {
-    let w = (c.kind === 'heavy' || c.kind === 'repeat') ? 3 : c.kind === 'recent' ? 1.5 : 1;
+  // 交互ルール（v1.4）：最後に差し出した極性と反対の極性の候補は、重みを2倍にして明確に当たりやすくする。
+  // 中立の候補は重みを変えず、流れにも関与しない。
+  function candWeight(c, lp) {
+    let w = c.kind === 'peak' ? 4 : c.kind === 'repeat' ? 2 : c.kind === 'recent' ? 1.2 : 1;
+    if (lp && (c.polarity === 'pos' || c.polarity === 'neg') && c.polarity !== lp) w *= 2;
     if (wasReflected(c.entry)) w *= 0.35;
     return w;
   }
   function drawCandidateIdx(list, excludeEntry) {
     if (!list.length) return 0;
+    const lp = lastPolarity();
     let pool = list.map((c, i) => i).filter(i => list[i].entry !== excludeEntry);
     if (!pool.length) pool = list.map((c, i) => i);
-    const total = pool.reduce((s, i) => s + candWeight(list[i]), 0);
+    const total = pool.reduce((s, i) => s + candWeight(list[i], lp), 0);
     let r = Math.random() * total;
-    for (const i of pool) { r -= candWeight(list[i]); if (r <= 0) return i; }
+    for (const i of pool) { r -= candWeight(list[i], lp); if (r <= 0) return i; }
     return pool[pool.length - 1];
   }
-  // 「ほかの言葉も見る」の巡回：いま表示している記録は飛ばして次へ進む。
+  // 「ほかの言葉も見る」の巡回：いま表示している記録は飛ばし、
+  // 前回と反対の極性の候補を先に回す（交互の流れを巡回でも保つ）。無ければ従来どおり次の記録へ。
   function nextCandidateIdx() {
     const list = state.candidates;
     if (list.length <= 1) return state.candIdx;
+    const cur = list[state.candIdx];
+    const lp = lastPolarity();
+    if (lp) {
+      for (let step = 1; step <= list.length; step++) {
+        const i = (state.candIdx + step) % list.length;
+        if (list[i].entry !== cur.entry && (list[i].polarity === 'pos' || list[i].polarity === 'neg') && list[i].polarity !== lp) return i;
+      }
+    }
     for (let step = 1; step <= list.length; step++) {
       const i = (state.candIdx + step) % list.length;
-      if (list[i].entry !== list[state.candIdx].entry) return i;
+      if (list[i].entry !== cur.entry) return i;
     }
     return state.candIdx;
   }
@@ -150,13 +214,20 @@
   }
 
   // 問いの言い回し（種類ごとに複数。いずれも「問うだけ・診断しない・招き」の文面に限る）
+  // v1.4：感情ピークには、極性ごとに「感情に触れる問い」を用意する。感情名は本人の記録のラベルを
+  // そのまま差し込むだけ（相棒が感情を名付けるのではない）。ラベルが無い日は、ラベルに触れない形に落とす。
   const ASKS = {
-    heavy: [
-      'あの日のあなたに、今のあなたなら何と返しますか。',
-      'あの日のあなたへ、今の言葉で伝えるとしたら、何と言いますか。',
-      'あの日、口に出せなかったことがあるとしたら、今なら何と言いますか。',
-      'あの日のあなたの隣に座るとしたら、どんな一言を添えますか。',
-      'あの日のあなたは、今のあなたのどんな言葉を待っていたのでしょう。',
+    peakNeg: [
+      em => em ? `あの日、「${em}」の只中にいたあなたに、今のあなたなら何と返しますか。` : 'あの日のあなたに、今のあなたなら何と返しますか。',
+      em => em ? `「${em}」を抱えていた日のあなたへ、今ならどんな言葉を届けますか。` : 'あの日のあなたへ、今の言葉で伝えるとしたら、何と言いますか。',
+      em => em ? `あの日、その気持ちの中で言えなかったことがあるとしたら、今なら何と言いますか。` : 'あの日、口に出せなかったことがあるとしたら、今なら何と言いますか。',
+      em => em ? `その気持ちの只中にいた日のあなたは、今のあなたのどんな言葉を待っていたのでしょう。` : 'あの日のあなたは、今のあなたのどんな言葉を待っていたのでしょう。',
+    ],
+    peakPos: [
+      em => em ? `あの日、「${em}」でいっぱいだったあなたに、今のあなたなら何と伝えますか。` : 'あの日のあなたに、今のあなたなら何と伝えますか。',
+      em => em ? `その「${em}」を味わっていた日のあなたへ、今ならどんな言葉を贈りますか。` : 'あの日を生きたあなたへ、今のあなたから一言贈るとしたら、何と言いますか。',
+      () => 'あの日の気持ちは、今のあなたのどこに残っていますか。',
+      () => 'その日を生きたあなたに、今のあなたなら何と返しますか。',
     ],
     repeat: [
       kw => `その「${kw}」は、今のあなたにはどう見えますか。`,
@@ -174,12 +245,13 @@
   const pickAsk = arr => arr[Math.floor(Math.random() * arr.length)];
 
   // 第一声を組み立てる。本人の言葉を、そのまま引用する。解釈は言わない。
+  // v1.4：その日の感情を、本人の記録のラベルそのままで事実として添える（ラベルが無い日は付けない）。
   function openingFor(cand) {
     const e = cand.entry;
     const q = pickQuote(e);
     const dateLabel = e.date || '';
     let lead;
-    if (cand.kind === 'heavy' || cand.kind === 'recent') {
+    if (cand.kind === 'peak' || cand.kind === 'recent') {
       lead = `${dateLabel}のあなたは、こう書いていました。`;
     } else if (cand.kind === 'repeat') {
       lead = `このところ、「${cand.keyword}」という言葉が、あなたの記録に${cand.count}回出てきました。いちばん最近は${dateLabel}。あなたはこう書いていました。`;
@@ -188,11 +260,14 @@
     }
     const quote = q || String(e.summary || '').split(/(?<=[。！？])/)[0] || '';
     const context = contextFor(e, q);
+    const emLabel = String(e.emotion || '').trim();
+    const emotion = emLabel ? `その日の感情は「${emLabel}」でした。` : '';
     let ask;
     if (cand.kind === 'repeat') ask = pickAsk(ASKS.repeat)(cand.keyword);
-    else if (cand.kind === 'heavy') ask = pickAsk(ASKS.heavy);
+    else if (cand.kind === 'peak' && cand.polarity === 'pos') ask = pickAsk(ASKS.peakPos)(emLabel);
+    else if (cand.kind === 'peak') ask = pickAsk(ASKS.peakNeg)(emLabel);
     else ask = pickAsk(ASKS.recent);
-    return { lead, quote, context, ask, entry: e };
+    return { lead, quote, context, emotion, ask, entry: e };
   }
 
   // ── データ取得：ホスト（Timeline Viewer）の取得済みを優先し、無ければ自分で取る ──
@@ -385,10 +460,12 @@
     }
     const o = openingFor(cand);
     state.lastEntry = cand.entry; // 次に開いた時の抽選から外すため、差し出した記録を覚える
+    rememberPolarity(cand.polarity); // 交互ルール：差し出した極性を端末に残す（中立は残さない）
     const contextHtml = o.context ? `<div>${esc(o.context)}</div>` : '';
-    const html = `${esc(o.lead)}<div class="aps-av-quote">${esc(o.quote)}</div>${contextHtml}${esc(o.ask)}`;
+    const emotionHtml = o.emotion ? `<div>${esc(o.emotion)}</div>` : '';
+    const html = `${esc(o.lead)}<div class="aps-av-quote">${esc(o.quote)}</div>${contextHtml}${emotionHtml}${esc(o.ask)}`;
     addMsg('ai', html);
-    state.history = `[${aiName()}]: ${o.lead}「${o.quote}」${o.context ? o.context : ''}${o.ask}\n`;
+    state.history = `[${aiName()}]: ${o.lead}「${o.quote}」${o.context ? o.context : ''}${o.emotion ? o.emotion : ''}${o.ask}\n`;
     // 新しい出会いごとに保存状態も仕切り直す（前回分の二重保存を防ぐ）
     state.ctx = { date: cand.entry.date || '', quote: o.quote, ask: o.ask };
     state.turns = 0; state.savedTurns = 0; state.savedLen = 0; state.saving = false;
