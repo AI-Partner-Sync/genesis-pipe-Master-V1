@@ -1,8 +1,9 @@
 // 浮遊AIアバター（試作 / prototype）
 // 理念：「過去の自分が最高の味方だった」という気づきが、自らを信じる力になる。
 // この部品の仕事は1つだけ：過去の自分の言葉を1件差し出し、今の自分が返事をする対話の入口を作る。
-// 表示は端末ごとのフラグ制（Timeline Viewer の #reflect=on と同じ流儀）。
-//   オン: Timeline_Viewer.html#avatar=on を一度開く ／ オフ: #avatar=off
+// 表示は端末ごとのフラグ制。有効化キーは振り返り機能と共通（aps_reflection_enabled）。
+//   オン・オフは設定画面（index.html）の振り返りトグル1つで両方を切り替える（v1.5〜、オーナー決定）。
+//   Timeline_Viewer.html#avatar=on / #avatar=off も、同じキーに書き込む経路として残す。
 // フラグが無い端末では、DOM自体を作らない（完全無表示）。
 // 前提: settings.js（apsLoadSettings / apsGasGetUrl / apsGasPostBody / apsIsUnauthorized）が読み込み済みであること。
 // v1.1 (2026-11-03): 対話パネルをiOS風ガラス（すりガラス）表現に。返事入力にマイク音声入力を追加
@@ -20,8 +21,12 @@
 //   感情ピーク（頂点＝score>=500／谷＝score<350、既存コードのスコア帯に準拠）を主軸候補にし、
 //   最後に差し出した極性を端末に覚えて、次回は反対の極性を当たりやすくする（ネガとポジの交互）。
 //   第一声には、その日の感情を本人の記録のラベルそのままで事実として添える。
+// v1.5 (2026-11-03): 有効化方式を振り返り機能と統合（オーナー決定）。
+//   専用キー aps_avatar_enabled は廃止し、振り返りキー aps_reflection_enabled を正とする。
+//   設定画面の振り返りトグル1つで「この日を振り返る」と浮遊アバターの両方が切り替わる。
+//   #avatar=on/off のハッシュ経路も同じキーへ収束させる（旧案内・旧プレビューリンクの互換）。
 (function () {
-  const FLAG_KEY = 'aps_avatar_enabled';
+  const FLAG_KEY = 'aps_reflection_enabled'; // 振り返り機能と共通の有効化キー（v1.5で統合）
   const AUTO_OPEN_KEY = 'aps_avatar_auto_open_date'; // 1日1回だけ自動で開くための実施日
   const POLARITY_KEY = 'aps_avatar_last_polarity'; // 最後に差し出した候補の極性（'pos'/'neg'。交互ルール用）
   const POOL_MAX = 10; // 抽選プールの上限（候補リストの上位から）
