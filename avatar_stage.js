@@ -304,14 +304,14 @@
   width:56px;height:56px;border-radius:50%;border:1.5px solid rgba(245,158,11,.85);cursor:pointer;padding:0;
   background:radial-gradient(circle at 32% 28%,rgba(245,158,11,.20),rgba(15,23,42,.92) 62%);
   color:#ffd97a;font-weight:700;letter-spacing:.02em;display:grid;place-items:center;
-  box-shadow:0 0 18px rgba(245,158,11,.35),0 6px 18px rgba(0,0,0,.5);
+  box-shadow:0 0 22px rgba(245,158,11,.42),0 0 44px rgba(245,158,11,.16),0 6px 18px rgba(0,0,0,.5);
   -webkit-tap-highlight-color:transparent;font-family:'Segoe UI',system-ui,sans-serif}
 .aps-av:focus-visible{outline:2px solid #f59e0b;outline-offset:3px}
 @media (prefers-reduced-motion:no-preference){
-  .aps-av{animation:apsAvDrift 7s ease-in-out infinite,apsAvGlow 7s ease-in-out infinite}
+  .aps-av{animation:apsAvDrift 5s ease-in-out infinite,apsAvGlow 5s ease-in-out infinite}
 }
 @keyframes apsAvDrift{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
-@keyframes apsAvGlow{0%,100%{box-shadow:0 0 12px rgba(245,158,11,.25),0 6px 18px rgba(0,0,0,.5)}50%{box-shadow:0 0 24px rgba(245,158,11,.5),0 6px 18px rgba(0,0,0,.5)}}
+@keyframes apsAvGlow{0%,100%{box-shadow:0 0 16px rgba(245,158,11,.35),0 0 36px rgba(245,158,11,.12),0 6px 18px rgba(0,0,0,.5);border-color:rgba(245,158,11,.6);filter:brightness(1)}50%{box-shadow:0 0 32px rgba(245,158,11,.7),0 0 64px rgba(245,158,11,.30),0 6px 18px rgba(0,0,0,.5);border-color:rgba(255,208,96,1);filter:brightness(1.1)}}
 .aps-av-name{line-height:1.18;text-align:center}
 .aps-av-name span{display:block}
 @media (prefers-reduced-motion:no-preference){
