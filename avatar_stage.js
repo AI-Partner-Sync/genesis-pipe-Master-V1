@@ -5,6 +5,8 @@
 //   オン: Timeline_Viewer.html#avatar=on を一度開く ／ オフ: #avatar=off
 // フラグが無い端末では、DOM自体を作らない（完全無表示）。
 // 前提: settings.js（apsLoadSettings / apsGasGetUrl / apsGasPostBody / apsIsUnauthorized）が読み込み済みであること。
+// v1.1 (2026-11-03): 対話パネルをiOS風ガラス（すりガラス）表現に。返事入力にマイク音声入力を追加
+//   （Chat.html の toggleRecording と同じ Web Speech API 方式。体験フロー・文案は v1 のまま）。
 (function () {
   const FLAG_KEY = 'aps_avatar_enabled';
 
@@ -145,10 +147,10 @@
 @keyframes apsAvGlow{0%,100%{box-shadow:0 0 12px rgba(245,158,11,.25),0 6px 18px rgba(0,0,0,.5)}50%{box-shadow:0 0 24px rgba(245,158,11,.5),0 6px 18px rgba(0,0,0,.5)}}
 .aps-av-panel{position:fixed;inset:0;z-index:950;display:flex;align-items:flex-end;justify-content:center;background:rgba(2,8,23,.55);
   font-family:'Segoe UI',system-ui,sans-serif;color:#e2e8f0}
-.aps-av-sheet{background:#0f172a;border:1px solid #334155;border-bottom:0;border-radius:18px 18px 0 0;width:100%;max-width:560px;
+.aps-av-sheet{background:#0f172a;border:1px solid #334155;border-bottom:0;border-radius:24px 24px 0 0;width:100%;max-width:560px;
   max-height:82vh;display:flex;flex-direction:column;padding:10px 18px calc(14px + env(safe-area-inset-bottom,0px));
   box-shadow:0 -12px 40px rgba(0,0,0,.55)}
-@media (min-width:640px){.aps-av-panel{justify-content:flex-end;padding-right:24px}.aps-av-sheet{border-radius:18px;border-bottom:1px solid #334155;margin-bottom:24px}}
+@media (min-width:640px){.aps-av-panel{justify-content:flex-end;padding-right:24px}.aps-av-sheet{border-radius:24px;border-bottom:1px solid #334155;margin-bottom:24px}}
 .aps-av-head{display:flex;align-items:center;gap:10px;padding:6px 0 10px;border-bottom:1px solid rgba(51,65,85,.6)}
 .aps-av-dot{width:30px;height:30px;border-radius:50%;border:1.5px solid rgba(245,158,11,.85);color:#ffd97a;display:grid;place-items:center;font-weight:700;flex:0 0 auto;
   background:radial-gradient(circle at 32% 28%,rgba(245,158,11,.20),rgba(15,23,42,.92) 62%)}
@@ -171,7 +173,30 @@
 .aps-av-input textarea:focus{border-color:#f59e0b}
 .aps-av-send{background:#f59e0b;border:0;color:#0a0f1e;font-weight:700;border-radius:10px;padding:0 18px;font-size:13px;cursor:pointer}
 .aps-av-send[disabled]{opacity:.5;cursor:default}
-.aps-av-note{font-size:11px;color:#64748b;line-height:1.7;padding-top:8px}`;
+.aps-av-note{font-size:11px;color:#64748b;line-height:1.7;padding-top:8px}
+.aps-av-mic{flex:0 0 auto;width:42px;height:42px;border-radius:50%;background:#1e293b;border:1px solid #334155;color:#f59e0b;
+  cursor:pointer;display:grid;place-items:center;padding:0;-webkit-tap-highlight-color:transparent}
+.aps-av-mic .material-icons{font-size:20px;line-height:1}
+.aps-av-mic.recording{background:rgba(239,68,68,.85);color:#fff;border-color:transparent;animation:apsAvPulseRed 1.4s infinite}
+.aps-av-mic.disabled-mic{opacity:.3;cursor:not-allowed}
+@keyframes apsAvPulseRed{0%{box-shadow:0 0 0 0 rgba(239,68,68,.5)}70%{box-shadow:0 0 0 12px rgba(239,68,68,0)}100%{box-shadow:0 0 0 0 rgba(239,68,68,0)}}
+@supports ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  .aps-av-panel{background:rgba(2,8,23,.32);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}
+  .aps-av-sheet{background:rgba(148,178,255,.13);-webkit-backdrop-filter:blur(24px) saturate(170%);backdrop-filter:blur(24px) saturate(170%);
+    border-color:rgba(255,255,255,.22);box-shadow:0 -12px 44px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.18)}
+  .aps-av-head{border-bottom-color:rgba(255,255,255,.14)}
+  .aps-av-input{border-top-color:rgba(255,255,255,.14)}
+  .aps-av-msg.ai{background:rgba(255,255,255,.09);border-color:rgba(255,255,255,.14)}
+  .aps-av-msg.user{background:rgba(245,158,11,.20);border-color:rgba(245,158,11,.40)}
+  .aps-av-input textarea{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.18)}
+  .aps-av-input textarea:focus{border-color:#f59e0b}
+  .aps-av-mic{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.18)}
+  .aps-av-mic.recording{background:rgba(239,68,68,.85);border-color:transparent}
+  .aps-av{background:radial-gradient(circle at 32% 28%,rgba(245,158,11,.28),rgba(21,32,58,.55) 62%);
+    -webkit-backdrop-filter:blur(10px) saturate(160%);backdrop-filter:blur(10px) saturate(160%)}
+  .aps-av-dot{background:radial-gradient(circle at 32% 28%,rgba(245,158,11,.28),rgba(21,32,58,.55) 62%);
+    -webkit-backdrop-filter:blur(8px) saturate(160%);backdrop-filter:blur(8px) saturate(160%)}
+}`;
     document.head.appendChild(st);
     const font = document.createElement('link');
     font.rel = 'stylesheet';
@@ -275,6 +300,7 @@
         <div class="aps-av-msgs"></div>
         <div class="aps-av-choices"></div>
         <div class="aps-av-input">
+          <button type="button" class="aps-av-mic" aria-label="音声で入力"><span class="material-icons">mic</span></button>
           <textarea rows="2" placeholder="あの日の自分へ、言葉を返す" aria-label="返事を書く"></textarea>
           <button type="button" class="aps-av-send">送る</button>
         </div>
@@ -284,6 +310,8 @@
     panelEl.querySelector('.aps-av-x').addEventListener('click', closePanel);
     panelEl.addEventListener('click', e => { if (e.target === panelEl) closePanel(); });
     panelEl.querySelector('.aps-av-send').addEventListener('click', onSend);
+    panelEl.querySelector('.aps-av-mic').addEventListener('click', toggleAvatarRecording);
+    setupAvatarMic();
     panelEl.querySelector('textarea').addEventListener('keydown', e => {
       if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) onSend();
     });
@@ -295,6 +323,7 @@
   }
 
   function closePanel() {
+    stopAvatarRecording();
     state.open = false;
     if (panelEl) { panelEl.remove(); panelEl = null; }
   }
@@ -302,6 +331,7 @@
   // 既存チャット（Chat.html の handleSend）と同じ ai_chat プロトコルで送る
   async function onSend() {
     if (state.busy) return;
+    stopAvatarRecording();
     const ta = panelEl.querySelector('textarea');
     const text = ta.value.trim();
     if (!text) return;
@@ -347,6 +377,66 @@
       state.busy = false;
       if (sendBtn) sendBtn.disabled = false;
     }
+  }
+
+  // ── 音声入力（Chat.html の音声入力と同じ流儀：Web Speech API、ja-JP、確定結果だけを入力欄へ追記。
+  //    「送信」と言うとそのまま送る／無音が続くと改行する、もチャット側に合わせた） ──
+  const AvatarSpeechAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let avatarRec = null, avatarRecording = false, avatarSilenceTimer = null;
+  const AVATAR_SILENCE_DELAY = 800;
+  function micBtn() { return panelEl ? panelEl.querySelector('.aps-av-mic') : null; }
+  function panelTextarea() { return panelEl ? panelEl.querySelector('textarea') : null; }
+
+  function setupAvatarMic() {
+    const btn = micBtn();
+    if (!btn) return;
+    if (!AvatarSpeechAPI) {
+      btn.classList.add('disabled-mic');
+      btn.title = 'このブラウザは音声入力に対応していません';
+      return;
+    }
+    if (avatarRec) return;
+    avatarRec = new AvatarSpeechAPI();
+    avatarRec.lang = 'ja-JP';
+    avatarRec.continuous = true;
+    avatarRec.interimResults = false;
+    avatarRec.onstart = () => {
+      avatarRecording = true;
+      const b = micBtn(); if (b) b.classList.add('recording');
+      const ta = panelTextarea(); if (ta) ta.placeholder = '音声認識中…';
+    };
+    avatarRec.onend = () => {
+      avatarRecording = false;
+      const b = micBtn(); if (b) b.classList.remove('recording');
+      const ta = panelTextarea(); if (ta) ta.placeholder = 'あの日の自分へ、言葉を返す';
+      clearTimeout(avatarSilenceTimer);
+    };
+    avatarRec.onresult = (e) => {
+      const ta = panelTextarea();
+      if (!ta) return;
+      let transcript = '';
+      for (let i = e.resultIndex; i < e.results.length; ++i)
+        if (e.results[i].isFinal) transcript += e.results[i][0].transcript;
+      if (!transcript) return;
+      clearTimeout(avatarSilenceTimer);
+      const keyword = transcript.trim().replace(/[。、！!？?\s…　]+$/, '');
+      if (keyword === '送信') { stopAvatarRecording(); onSend(); return; }
+      ta.value += transcript;
+      avatarSilenceTimer = setTimeout(() => {
+        if (avatarRecording && ta.value && !ta.value.endsWith('\n')) ta.value += '\n';
+      }, AVATAR_SILENCE_DELAY);
+    };
+    avatarRec.onerror = (e) => { if (state.open) addMsg('sys', 'マイクエラー: ' + e.error); };
+  }
+
+  function stopAvatarRecording() {
+    if (avatarRec && avatarRecording) { try { avatarRec.stop(); } catch (err) { /* 既に止まっている */ } }
+  }
+
+  function toggleAvatarRecording() {
+    if (!AvatarSpeechAPI || !avatarRec) { addMsg('sys', 'このブラウザは音声入力に対応していません'); return; }
+    if (avatarRecording) stopAvatarRecording();
+    else { try { avatarRec.start(); } catch (err) { /* 二重起動の防止 */ } }
   }
 
   function boot() {
