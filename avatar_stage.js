@@ -10,8 +10,16 @@
 // v1.2 (2026-11-03): 「この対話を保存」ボタンを追加（オーナー決定：A案）。
 //   保存は Chat.html の save プロトコルをそのまま流用し、チャット保存として残す。
 //   Reflection_Log には書かない（「この日を振り返る」＝稽古の記録との役割分担を維持するため）。
+// v1.3 (2026-11-03): 開くたびの出会いを新しく保ち、相棒の存在を静かに主張する。
+//   候補は上位プール（最大10件）から重み付き抽選（heavy/repeat を当たりやすく、振り返り済みは当たりにくく、
+//   直前に見せた記録は次の抽選から外す）。第一声には「文脈の一文」（本人の記録の事実のみ）を引用と問いの間に足し、
+//   問いの言い回しを種類ごとに複数用意して抽選する。データ読み込み完了時、その日はじめての1回だけ、
+//   パネルがふわっと自動で開く（閉じたらその日は二度と勝手に開かない。候補が無い静かな日は開かない）。
+//   AI名は円いっぱいに大きく（長い名前は二行）、サークルは名前の長さで最大68pxまで広げる。
 (function () {
   const FLAG_KEY = 'aps_avatar_enabled';
+  const AUTO_OPEN_KEY = 'aps_avatar_auto_open_date'; // 1日1回だけ自動で開くための実施日
+  const POOL_MAX = 10; // 抽選プールの上限（候補リストの上位から）
 
   // ── フラグ判定（reflection_stage の REFLECT_ON と同じ書き方） ──
   let AVATAR_ON = false;
@@ -85,6 +93,86 @@
     return out;
   }
 
+  // ── 候補の抽選（v1.3） ──
+  // 開くたびに同じ顔が出るのをやめ、プールから1件を重み付きで引く。
+  // 重み：heavy（重い日）と repeat（繰り返しの言葉）を当たりやすくし、
+  // すでに「この日を振り返る」を済ませた日は当たりにくくする。
+  // 直前に見せた記録は次の抽選から外し、連続して同じ出会いにならないようにする。
+  function candWeight(c) {
+    let w = (c.kind === 'heavy' || c.kind === 'repeat') ? 3 : c.kind === 'recent' ? 1.5 : 1;
+    if (wasReflected(c.entry)) w *= 0.35;
+    return w;
+  }
+  function drawCandidateIdx(list, excludeEntry) {
+    if (!list.length) return 0;
+    let pool = list.map((c, i) => i).filter(i => list[i].entry !== excludeEntry);
+    if (!pool.length) pool = list.map((c, i) => i);
+    const total = pool.reduce((s, i) => s + candWeight(list[i]), 0);
+    let r = Math.random() * total;
+    for (const i of pool) { r -= candWeight(list[i]); if (r <= 0) return i; }
+    return pool[pool.length - 1];
+  }
+  // 「ほかの言葉も見る」の巡回：いま表示している記録は飛ばして次へ進む。
+  function nextCandidateIdx() {
+    const list = state.candidates;
+    if (list.length <= 1) return state.candIdx;
+    for (let step = 1; step <= list.length; step++) {
+      const i = (state.candIdx + step) % list.length;
+      if (list[i].entry !== list[state.candIdx].entry) return i;
+    }
+    return state.candIdx;
+  }
+
+  // ── 文脈の一文（v1.3） ──
+  // 引用と問いの間に、その日の事実を一文だけ添える。材料は本人の記録（insight / summary / keystone）のみで、
+  // 引用と重なる文は使わない。解釈や励ましは足さない。材料が無ければ null（無理に作らない）。
+  function contextFor(e, quote) {
+    const sentences = t => String(t || '').split(/(?<=[。！？])/).map(s => s.trim()).filter(Boolean);
+    const clean = s => s.replace(/[「」]/g, '').trim();
+    const usable = s => {
+      const c = clean(s);
+      // 引用そのものを含む文は「重なり」として避ける。短すぎる断片も、事実として読めないので避ける。
+      return c.length >= 12 && !(quote && c.includes(quote));
+    };
+    // 1) insight（その日の気づき）の一文
+    for (const s of sentences(e.insight)) if (usable(s)) return clean(s);
+    // 2) summary の一文（引用を含まないもの）
+    for (const s of sentences(e.summary)) if (usable(s)) return clean(s);
+    // 3) keystone から引用を除いた残り（書いた日の核が地の文で残っている場合）
+    const keyRest = clean(String(e.keystone || '').replace(/「[^「」]*」/g, ''));
+    if (keyRest.length >= 12 && !(quote && keyRest.includes(quote))) return keyRest;
+    // 4) summary の文から引用符を落とした形（引用そのものではない事実文として読める場合）
+    for (const s of sentences(e.summary)) {
+      const c = clean(s);
+      if (c.length >= 12 && !(quote && c.includes(quote))) return c;
+    }
+    return null;
+  }
+
+  // 問いの言い回し（種類ごとに複数。いずれも「問うだけ・診断しない・招き」の文面に限る）
+  const ASKS = {
+    heavy: [
+      'あの日のあなたに、今のあなたなら何と返しますか。',
+      'あの日のあなたへ、今の言葉で伝えるとしたら、何と言いますか。',
+      'あの日、口に出せなかったことがあるとしたら、今なら何と言いますか。',
+      'あの日のあなたの隣に座るとしたら、どんな一言を添えますか。',
+      'あの日のあなたは、今のあなたのどんな言葉を待っていたのでしょう。',
+    ],
+    repeat: [
+      kw => `その「${kw}」は、今のあなたにはどう見えますか。`,
+      kw => `繰り返し現れる「${kw}」は、あなたの中で何を守ってきたのでしょう。`,
+      kw => `「${kw}」という言葉に、今のあなたなら何と返しますか。`,
+      kw => `その「${kw}」と付き合ってきた時間を、今のあなたはどう眺めますか。`,
+    ],
+    recent: [
+      '今読み返すと、どう響きますか。',
+      'この言葉を書いた日のあなたに、今のあなたなら何と伝えますか。',
+      '読み返してみて、最初に心に浮かんだのは、どんな言葉ですか。',
+      'この言葉は、今のあなたのどこに届きましたか。',
+    ],
+  };
+  const pickAsk = arr => arr[Math.floor(Math.random() * arr.length)];
+
   // 第一声を組み立てる。本人の言葉を、そのまま引用する。解釈は言わない。
   function openingFor(cand) {
     const e = cand.entry;
@@ -99,11 +187,12 @@
       lead = `${dateLabel}の、あなたの記録です。`;
     }
     const quote = q || String(e.summary || '').split(/(?<=[。！？])/)[0] || '';
+    const context = contextFor(e, q);
     let ask;
-    if (cand.kind === 'repeat') ask = `その「${cand.keyword}」は、今のあなたにはどう見えますか。`;
-    else if (cand.kind === 'heavy') ask = 'あの日のあなたに、今のあなたなら何と返しますか。';
-    else ask = '今読み返すと、どう響きますか。';
-    return { lead, quote, ask, entry: e };
+    if (cand.kind === 'repeat') ask = pickAsk(ASKS.repeat)(cand.keyword);
+    else if (cand.kind === 'heavy') ask = pickAsk(ASKS.heavy);
+    else ask = pickAsk(ASKS.recent);
+    return { lead, quote, context, ask, entry: e };
   }
 
   // ── データ取得：ホスト（Timeline Viewer）の取得済みを優先し、無ければ自分で取る ──
@@ -148,6 +237,14 @@
 }
 @keyframes apsAvDrift{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
 @keyframes apsAvGlow{0%,100%{box-shadow:0 0 12px rgba(245,158,11,.25),0 6px 18px rgba(0,0,0,.5)}50%{box-shadow:0 0 24px rgba(245,158,11,.5),0 6px 18px rgba(0,0,0,.5)}}
+.aps-av-name{line-height:1.18;text-align:center}
+.aps-av-name span{display:block}
+@media (prefers-reduced-motion:no-preference){
+  .aps-av-panel.aps-av-auto{animation:apsAvFadeIn .6s ease}
+  .aps-av-panel.aps-av-auto .aps-av-sheet{animation:apsAvRise .75s cubic-bezier(.22,.8,.3,1)}
+}
+@keyframes apsAvFadeIn{from{opacity:0}to{opacity:1}}
+@keyframes apsAvRise{from{opacity:0;transform:translateY(18px) scale(.985)}to{opacity:1;transform:translateY(0) scale(1)}}
 .aps-av-panel{position:fixed;inset:0;z-index:950;display:flex;align-items:flex-end;justify-content:center;background:rgba(2,8,23,.55);
   font-family:'Segoe UI',system-ui,sans-serif;color:#e2e8f0}
 .aps-av-sheet{background:#0f172a;border:1px solid #334155;border-bottom:0;border-radius:24px 24px 0 0;width:100%;max-width:560px;
@@ -217,6 +314,7 @@
   // ── 状態 ──
   const state = {
     open: false, candidates: [], candIdx: 0, started: false, history: '', recallUsed: false, busy: false,
+    lastEntry: null, // 直前に差し出した記録（次の抽選から外し、連続した同じ出会いを避ける）
     // 保存（A案）用：ctx=文脈ヘッダの材料、turns=完了した往復数、savedTurns/savedLen=保存済みの境界、saving=送信中
     ctx: null, turns: 0, savedTurns: 0, savedLen: 0, saving: false,
   };
@@ -227,15 +325,34 @@
     return n <= 2 ? '15px' : n <= 4 ? '12px' : '10px';
   }
 
+  // サークルの大きさと名前の組み方（v1.3：名前は円いっぱいに大きく。相棒の存在を静かに主張する）
+  // 短い名前ほど大きく1行で、長い名前は自動で二行・中央揃え。サークル径も名前の長さで少しだけ広げる（最大68px）。
+  // 名前を切り捨てることはしない（名前は同一性そのもの）。
+  function circleMetrics(name) {
+    const chars = [...String(name)];
+    const n = chars.length;
+    if (n <= 2) return { size: 62, font: '25px', lines: [name] };
+    if (n <= 4) return { size: 64, font: '19px', lines: [name] };
+    if (n <= 6) return { size: 66, font: '15.5px', lines: [name] };
+    const mid = Math.ceil(n / 2);
+    return { size: 68, font: '13.5px', lines: [chars.slice(0, mid).join(''), chars.slice(mid).join('')] };
+  }
+
   function buildCircle() {
     injectStyle();
     circleEl = document.createElement('button');
     circleEl.type = 'button';
     circleEl.className = 'aps-av';
-    circleEl.style.fontSize = nameFontSize(aiName());
-    circleEl.textContent = aiName();
+    const m = circleMetrics(aiName());
+    circleEl.style.width = m.size + 'px';
+    circleEl.style.height = m.size + 'px';
+    circleEl.style.fontSize = m.font;
+    const wrap = document.createElement('span');
+    wrap.className = 'aps-av-name';
+    wrap.innerHTML = m.lines.map(l => `<span>${esc(l)}</span>`).join('');
+    circleEl.appendChild(wrap);
     circleEl.setAttribute('aria-label', `${aiName()}と、過去の言葉を振り返る`);
-    circleEl.addEventListener('click', openPanel);
+    circleEl.addEventListener('click', () => openPanel(false));
     document.body.appendChild(circleEl);
   }
 
@@ -267,9 +384,11 @@
       return;
     }
     const o = openingFor(cand);
-    const html = `${esc(o.lead)}<div class="aps-av-quote">${esc(o.quote)}</div>${esc(o.ask)}`;
+    state.lastEntry = cand.entry; // 次に開いた時の抽選から外すため、差し出した記録を覚える
+    const contextHtml = o.context ? `<div>${esc(o.context)}</div>` : '';
+    const html = `${esc(o.lead)}<div class="aps-av-quote">${esc(o.quote)}</div>${contextHtml}${esc(o.ask)}`;
     addMsg('ai', html);
-    state.history = `[${aiName()}]: ${o.lead}「${o.quote}」${o.ask}\n`;
+    state.history = `[${aiName()}]: ${o.lead}「${o.quote}」${o.context ? o.context : ''}${o.ask}\n`;
     // 新しい出会いごとに保存状態も仕切り直す（前回分の二重保存を防ぐ）
     state.ctx = { date: cand.entry.date || '', quote: o.quote, ask: o.ask };
     state.turns = 0; state.savedTurns = 0; state.savedLen = 0; state.saving = false;
@@ -292,7 +411,7 @@
       const other = document.createElement('button');
       other.type = 'button'; other.className = 'aps-av-link'; other.textContent = 'ほかの言葉も見る';
       other.addEventListener('click', () => {
-        state.candIdx = (state.candIdx + 1) % state.candidates.length;
+        state.candIdx = nextCandidateIdx();
         renderOpening();
       });
       choices.appendChild(other);
@@ -376,12 +495,12 @@
     }
   }
 
-  async function openPanel() {
+  async function openPanel(isAuto) {
     if (state.open) return;
     state.open = true;
     injectStyle();
     panelEl = document.createElement('div');
-    panelEl.className = 'aps-av-panel';
+    panelEl.className = 'aps-av-panel' + (isAuto ? ' aps-av-auto' : '');
     panelEl.setAttribute('role', 'dialog');
     panelEl.setAttribute('aria-label', `${aiName()}との振り返り`);
     const name = aiName();
@@ -417,9 +536,45 @@
     });
     addMsg('sys', '読み込んでいます…');
     const entries = await loadEntries();
-    state.candidates = buildCandidates(entries);
-    state.candIdx = 0;
+    // 候補は上位プールに絞り、開くたびに抽選で1件と出会う（直前に見せた記録は外す）
+    state.candidates = buildCandidates(entries).slice(0, POOL_MAX);
+    state.candIdx = drawCandidateIdx(state.candidates, state.lastEntry);
     if (state.open) renderOpening();
+  }
+
+  // ── 1日1回の自動オープン（v1.3） ──
+  // 右下で待つだけでは、いつか存在を忘れられる。だから Timeline の読み込みが済んだら、
+  // その日はじめての1回だけ、相棒のほうから静かに開いて招く。
+  // 開いた時点で実施日を残すので、利用者が閉じたら、その日は二度と勝手に開かない。
+  // 候補が1件も無い日（静かな日・未連携）は、開かないことが正しい。
+  function localToday() {
+    const d = new Date();
+    const p = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  }
+  function tryAutoOpen(entries) {
+    let done = null;
+    try { done = localStorage.getItem(AUTO_OPEN_KEY); } catch (err) { return; }
+    if (done === localToday()) return; // 今日はもう招いた
+    if (!buildCandidates(entries).length) return; // 静かな日は開かない
+    try { localStorage.setItem(AUTO_OPEN_KEY, localToday()); } catch (err) { return; }
+    openPanel(true);
+  }
+  // ホスト（Timeline Viewer）の読み込み完了を見守る：allEntries が入り、候補が作れる状態になったら一度だけ判定する。
+  // 手動で先に開かれた場合や、一定時間データが来ない場合は、見守りを終える。
+  function watchAutoOpen() {
+    let tries = 0;
+    const timer = setInterval(() => {
+      tries += 1;
+      if (state.open) { clearInterval(timer); return; }
+      const entries = hostEntries();
+      if (entries && entries.length) {
+        clearInterval(timer);
+        tryAutoOpen(entries);
+      } else if (tries >= 75) { // 約60秒
+        clearInterval(timer);
+      }
+    }, 800);
   }
 
   function closePanel() {
@@ -544,6 +699,7 @@
   function boot() {
     if (document.body) buildCircle();
     else document.addEventListener('DOMContentLoaded', buildCircle);
+    watchAutoOpen();
   }
   boot();
 
