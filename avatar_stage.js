@@ -25,6 +25,8 @@
 //   専用キー aps_avatar_enabled は廃止し、振り返りキー aps_reflection_enabled を正とする。
 //   設定画面の振り返りトグル1つで「この日を振り返る」と浮遊アバターの両方が切り替わる。
 //   #avatar=on/off のハッシュ経路も同じキーへ収束させる（旧案内・旧プレビューリンクの互換）。
+// v1.6 (2026-11-04): 対話シート（テキストのウィンドウ）だけを不透過に変更（オーナー実機フィードバック：透けた背景で文字が読みにくい）。
+//   背景のぼかし（パネル全体）と浮遊ボタンのガラス表現はそのまま維持し、シートの背景だけを単色に固定して可読性を確保する。
 (function () {
   const FLAG_KEY = 'aps_reflection_enabled'; // 振り返り機能と共通の有効化キー（v1.5で統合）
   const AUTO_OPEN_KEY = 'aps_avatar_auto_open_date'; // 1日1回だけ自動で開くための実施日
@@ -368,8 +370,8 @@
 @keyframes apsAvPulseRed{0%{box-shadow:0 0 0 0 rgba(239,68,68,.5)}70%{box-shadow:0 0 0 12px rgba(239,68,68,0)}100%{box-shadow:0 0 0 0 rgba(239,68,68,0)}}
 @supports ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
   .aps-av-panel{background:rgba(2,8,23,.32);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}
-  .aps-av-sheet{background:rgba(148,178,255,.13);-webkit-backdrop-filter:blur(24px) saturate(170%);backdrop-filter:blur(24px) saturate(170%);
-    border-color:rgba(255,255,255,.22);box-shadow:0 -12px 44px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.18)}
+  .aps-av-sheet{background:#0f172a;border-color:rgba(255,255,255,.22);
+    box-shadow:0 -12px 44px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.10)}
   .aps-av-head{border-bottom-color:rgba(255,255,255,.14)}
   .aps-av-input{border-top-color:rgba(255,255,255,.14)}
   .aps-av-msg.ai{background:rgba(255,255,255,.09);border-color:rgba(255,255,255,.14)}
