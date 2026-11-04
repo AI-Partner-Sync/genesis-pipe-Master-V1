@@ -27,6 +27,8 @@
 //   #avatar=on/off のハッシュ経路も同じキーへ収束させる（旧案内・旧プレビューリンクの互換）。
 // v1.6 (2026-11-04): 対話シート（テキストのウィンドウ）だけを不透過に変更（オーナー実機フィードバック：透けた背景で文字が読みにくい）。
 //   背景のぼかし（パネル全体）と浮遊ボタンのガラス表現はそのまま維持し、シートの背景だけを単色に固定して可読性を確保する。
+// v1.7 (2026-11-05): 二層構造に変更（オーナー実機フィードバック：不透過はテキストの枠だけでよい）。
+//   シート全体（後ろの枠）は v1.5 のすりガラスに戻し、テキストが載るメッセージ欄（.aps-av-msgs）だけを不透過の内窓として固定する。
 (function () {
   const FLAG_KEY = 'aps_reflection_enabled'; // 振り返り機能と共通の有効化キー（v1.5で統合）
   const AUTO_OPEN_KEY = 'aps_avatar_auto_open_date'; // 1日1回だけ自動で開くための実施日
@@ -339,7 +341,8 @@
 .aps-av-title{font-size:13px;color:#e2e8f0;font-weight:700}
 .aps-av-sub{font-size:11px;color:#64748b}
 .aps-av-x{margin-left:auto;background:none;border:0;color:#94a3b8;font-size:22px;cursor:pointer;line-height:1;padding:4px}
-.aps-av-msgs{overflow-y:auto;padding:14px 2px;display:flex;flex-direction:column;gap:12px;min-height:120px}
+.aps-av-msgs{overflow-y:auto;padding:14px 12px;display:flex;flex-direction:column;gap:12px;min-height:120px;
+  background:#0d1526;border:1px solid rgba(255,255,255,.10);border-radius:16px}
 .aps-av-msg{max-width:88%;font-size:14px;line-height:1.75;padding:10px 14px;border-radius:14px;white-space:pre-wrap;word-break:break-word}
 .aps-av-msg.ai{align-self:flex-start;background:rgba(30,41,59,.9);border:1px solid rgba(51,65,85,.7);border-bottom-left-radius:4px}
 .aps-av-msg.user{align-self:flex-end;background:rgba(245,158,11,.16);border:1px solid rgba(245,158,11,.35);border-bottom-right-radius:4px}
@@ -370,8 +373,8 @@
 @keyframes apsAvPulseRed{0%{box-shadow:0 0 0 0 rgba(239,68,68,.5)}70%{box-shadow:0 0 0 12px rgba(239,68,68,0)}100%{box-shadow:0 0 0 0 rgba(239,68,68,0)}}
 @supports ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
   .aps-av-panel{background:rgba(2,8,23,.32);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}
-  .aps-av-sheet{background:#0f172a;border-color:rgba(255,255,255,.22);
-    box-shadow:0 -12px 44px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.10)}
+  .aps-av-sheet{background:rgba(148,178,255,.13);-webkit-backdrop-filter:blur(24px) saturate(170%);backdrop-filter:blur(24px) saturate(170%);
+    border-color:rgba(255,255,255,.22);box-shadow:0 -12px 44px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.18)}
   .aps-av-head{border-bottom-color:rgba(255,255,255,.14)}
   .aps-av-input{border-top-color:rgba(255,255,255,.14)}
   .aps-av-msg.ai{background:rgba(255,255,255,.09);border-color:rgba(255,255,255,.14)}
