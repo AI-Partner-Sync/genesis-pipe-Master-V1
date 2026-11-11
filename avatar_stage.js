@@ -29,6 +29,10 @@
 //   背景のぼかし（パネル全体）と浮遊ボタンのガラス表現はそのまま維持し、シートの背景だけを単色に固定して可読性を確保する。
 // v1.7 (2026-11-05): 二層構造に変更（オーナー実機フィードバック：不透過はテキストの枠だけでよい）。
 //   シート全体（後ろの枠）は v1.5 のすりガラスに戻し、テキストが載るメッセージ欄（.aps-av-msgs）だけを不透過の内窓として固定する。
+// v2.0 (2026-11-11): 「反論対処モード」を追加（オーナー決定）。仕様書：RIKKIS ROOM/Projects/反論対処トレーニング_設計仕様書.md
+//   教え方の3段：①やってみせる（画面の言葉に、3つの剣で3通りの返し）→ ②試させる（剣を1つ選んで、自分の返しを書く）
+//   → ③即時フィードバック（忖度しない。強い／惜しい／弱い＋修正版）。AI は GAS 経由の Claude Sonnet 5.5（I_SOM.js）。
+//   16技法の山札・端末の記録は som_trainer.js。モードを切ると v1.7 と同じ体験に戻る。
 (function () {
   const FLAG_KEY = 'aps_reflection_enabled'; // 振り返り機能と共通の有効化キー（v1.5で統合）
   const AUTO_OPEN_KEY = 'aps_avatar_auto_open_date'; // 1日1回だけ自動で開くための実施日
@@ -471,6 +475,7 @@
     const o = openingFor(cand);
     state.lastEntry = cand.entry; // 次に開いた時の抽選から外すため、差し出した記録を覚える
     rememberPolarity(cand.polarity); // 交互ルール：差し出した極性を端末に残す（中立は残さない）
+    if (somActive()) { somOpening(cand, o); return; } // 反論対処モード（v2.0）
     const contextHtml = o.context ? `<div>${esc(o.context)}</div>` : '';
     const emotionHtml = o.emotion ? `<div>${esc(o.emotion)}</div>` : '';
     const html = `${esc(o.lead)}<div class="aps-av-quote">${esc(o.quote)}</div>${contextHtml}${emotionHtml}${esc(o.ask)}`;
@@ -596,8 +601,10 @@
         <div class="aps-av-head">
           <div class="aps-av-dot" style="font-size:${nameFontSize(name)}">${esc(name)}</div>
           <div><div class="aps-av-title">${esc(name)}</div><div class="aps-av-sub">過去のあなたの言葉から</div></div>
+          ${window.ApsSom ? '<button type="button" class="aps-av-somtg" aria-pressed="false">反論対処モード</button>' : ''}
           <button type="button" class="aps-av-x" aria-label="閉じる">×</button>
         </div>
+        <div class="aps-som-shelf"></div>
         <div class="aps-av-msgs"></div>
         <div class="aps-av-choices"></div>
         <div class="aps-av-input">
@@ -617,6 +624,10 @@
     panelEl.querySelector('.aps-av-send').addEventListener('click', onSend);
     panelEl.querySelector('.aps-av-save').addEventListener('click', onSaveConversation);
     panelEl.querySelector('.aps-av-mic').addEventListener('click', toggleAvatarRecording);
+    const somTg = panelEl.querySelector('.aps-av-somtg');
+    if (somTg) somTg.addEventListener('click', toggleSomMode);
+    injectSomStyle();
+    refreshSomChrome();
     setupAvatarMic();
     panelEl.querySelector('textarea').addEventListener('keydown', e => {
       if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) onSend();
@@ -674,6 +685,7 @@
   async function onSend() {
     if (state.busy) return;
     stopAvatarRecording();
+    if (somActive()) { somOnSend(); return; } // 反論対処モード（v2.0）：試させる → 即時フィードバック
     const ta = panelEl.querySelector('textarea');
     const text = ta.value.trim();
     if (!text) return;
@@ -752,7 +764,7 @@
     avatarRec.onend = () => {
       avatarRecording = false;
       const b = micBtn(); if (b) b.classList.remove('recording');
-      const ta = panelTextarea(); if (ta) ta.placeholder = 'あの日の自分へ、言葉を返す';
+      const ta = panelTextarea(); if (ta) ta.placeholder = somActive() ? SOM_PLACEHOLDER : 'あの日の自分へ、言葉を返す';
       clearTimeout(avatarSilenceTimer);
     };
     avatarRec.onresult = (e) => {
@@ -781,6 +793,351 @@
     if (!AvatarSpeechAPI || !avatarRec) { addMsg('sys', 'このブラウザは音声入力に対応していません'); return; }
     if (avatarRecording) stopAvatarRecording();
     else { try { avatarRec.start(); } catch (err) { /* 二重起動の防止 */ } }
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  // 反論対処モード（v2.0）
+  // 教え方の3段：①やってみせる → ②試させる → ③即時フィードバック
+  // ════════════════════════════════════════════════════════════════
+  function somActive() { return !!(window.ApsSom && ApsSom.isOn()); }
+  const SOM_PLACEHOLDER = '選んだ剣で、この言葉に返してみる';
+  const DEFAULT_PLACEHOLDER = 'あの日の自分へ、言葉を返す';
+
+  function refreshSomChrome() {
+    if (!panelEl) return;
+    const on = somActive();
+    const tg = panelEl.querySelector('.aps-av-somtg');
+    if (tg) { tg.classList.toggle('on', on); tg.setAttribute('aria-pressed', on ? 'true' : 'false'); }
+    const sub = panelEl.querySelector('.aps-av-sub');
+    if (sub) sub.textContent = on ? '反論対処の稽古' : '過去のあなたの言葉から';
+    panelEl.querySelector('.aps-av-sheet').classList.toggle('aps-som-on', on);
+    const ta = panelTextarea();
+    if (ta) ta.placeholder = on ? SOM_PLACEHOLDER : DEFAULT_PLACEHOLDER;
+    renderSomShelf();
+  }
+
+  // 剣の棚：この巡で見た剣が灯る（16の印、5つの群の色）
+  function renderSomShelf() {
+    const box = panelEl && panelEl.querySelector('.aps-som-shelf');
+    if (!box) return;
+    if (!somActive()) { box.innerHTML = ''; box.style.display = 'none'; return; }
+    const seen = ApsSom.seenThisRound();
+    const deck = ApsSom._loadDeck();
+    const dots = ApsSom.IDS.map(id => {
+      const d = ApsSom.def(id);
+      const lit = seen.includes(id);
+      return `<i class="aps-som-dot${lit ? ' lit' : ''}" style="--c:${ApsSom.colorOf(id)}" title="${esc(d.no + '. ' + d.name + '（' + d.sword + '）')}"></i>`;
+    }).join('');
+    box.style.display = 'flex';
+    box.innerHTML = `<span class="aps-som-shelf-label">剣の棚</span><span class="aps-som-dots">${dots}</span><span class="aps-som-shelf-count">第${deck.round}巡 ${seen.length}/16</span>`;
+  }
+
+  function toggleSomMode() {
+    if (!window.ApsSom) return;
+    ApsSom.setOn(!ApsSom.isOn());
+    state.som = null;
+    refreshSomChrome();
+    renderOpening(); // 同じ言葉のまま、モードだけ切り替える
+  }
+
+  // ① 言葉を差し出す（画面の言葉はそのまま。入れ替えない）
+  function somOpening(cand, o) {
+    const choices = panelEl.querySelector('.aps-av-choices');
+    const contextHtml = o.context ? `<div>${esc(o.context)}</div>` : '';
+    addMsg('ai', `${esc(o.lead)}<div class="aps-av-quote">${esc(o.quote)}</div>${contextHtml}もし誰かにこう言われたら、あなたならどう返しますか。<br>まず、3つの剣での返し方を見てみましょう。`);
+    state.history = `[${aiName()}]: ${o.lead}「${o.quote}」${o.context || ''}（反論対処の稽古）\n`;
+    state.ctx = { date: cand.entry.date || '', quote: o.quote, ask: '反論対処の稽古' };
+    state.turns = 0; state.savedTurns = 0; state.savedLen = 0; state.saving = false;
+    refreshSaveBtn();
+    state.som = { quote: o.quote, context: o.context || '', emotion: String(cand.entry.emotion || '').trim(), ids: [], replies: [], pick: null, awaitQuote: false };
+    choices.innerHTML = '';
+    somShowExamples();
+  }
+
+  // 「今日聞いた言葉で稽古する」：入力欄に入れた言葉を、反論として受け取る
+  function somAskForQuote() {
+    state.som = { quote: '', context: '', emotion: '', ids: [], replies: [], pick: null, awaitQuote: true };
+    panelEl.querySelector('.aps-av-msgs').innerHTML = '';
+    panelEl.querySelector('.aps-av-choices').innerHTML = '';
+    addMsg('ai', '今日、誰かに言われた言葉（反論）や、自分の心の声を、下に書いてください。声でも入れられます。<br>その言葉に、3つの剣で返し方を見せます。');
+    const ta = panelTextarea();
+    if (ta) { ta.placeholder = '例：「どうせ自分には無理だよ」'; ta.focus(); }
+  }
+
+  // ① やってみせる：3つの剣で、3通りの返し
+  async function somShowExamples() {
+    const som = state.som;
+    if (!som || !som.quote) return;
+    const choices = panelEl.querySelector('.aps-av-choices');
+    choices.innerHTML = '';
+    if (ApsSom.isUnsafe(som.quote)) { somUnsafe(); return; }
+    const draw = ApsSom.drawThree();
+    som.ids = draw.ids; som.pick = null;
+    renderSomShelf();
+    const s = settings();
+    let replies = null, note = '';
+    if (s.gasUrl) {
+      const wait = addMsg('sys', '3つの返しを作っています（AI を使います。一度作った返しは保存し、二度と課金しません）…');
+      state.busy = true;
+      try {
+        const res = await fetch(s.gasUrl, {
+          method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: apsGasPostBody({ type: 'som_examples', quote: som.quote, context: som.context, emotion: som.emotion, ids: som.ids, userName: userName() }),
+        });
+        const data = await res.json();
+        wait.remove();
+        if (apsIsUnauthorized(data)) { addMsg('sys', APS_UNAUTHORIZED_MESSAGE); return; }
+        if (data && data.status === 'unsafe') { somUnsafe(); return; }
+        if (data && data.status === 'success' && Array.isArray(data.replies)) replies = data.replies;
+        else note = 'ごめんなさい、今回はAIの返しを作れませんでした。代わりに、型の見本で稽古しましょう。';
+      } catch (err) {
+        wait.remove();
+        note = 'ごめんなさい、通信がうまくいきませんでした。代わりに、型の見本で稽古しましょう。';
+      } finally { state.busy = false; }
+    } else {
+      note = 'いまは型の見本です。スプレッドシートと連携すると、あなたの言葉に合わせた返しになり、あなたの返しへの即時フィードバックも受けられます。';
+    }
+    // AI の返しが無い札（作れなかった・品質の守りで外れた）は、型の見本に差し替える
+    som.replies = som.ids.map(id => {
+      const r = replies && replies.find(x => x && x.id === id && !x.fallback && x.reply);
+      return r || ApsSom.templateFor(id, som.quote);
+    });
+    if (note) addMsg('sys', esc(note));
+    som.replies.forEach((r, i) => { addSomCard(r, i); ApsSom.bump(r.id, 'shown'); });
+    state.history += som.replies.map(r => { const d = ApsSom.def(r.id); return `[${aiName()}]（${d.name}・${d.sword}）: ${r.reply}`; }).join('\n') + '\n';
+    if (draw.roundDone) addMsg('sys', '16の剣を、ひと通り見ました。ここから新しい巡です。');
+    addMsg('ai', '同じ言葉でも、返し方は一つではありません。どれも、相手を責めずに、前に進む力を信じている返しです。<br><b>では、あなたの番です。</b>3つの剣から1つ選んで、同じ言葉に、自分の言葉で返してみてください。');
+    somPickChoices();
+  }
+
+  function markUsed(text, used) {
+    let html = esc(text);
+    (used || []).filter(Boolean).sort((a, b) => b.length - a.length).forEach(u => {
+      const e = esc(u);
+      if (e && html.includes(e)) html = html.split(e).join(`<mark class="aps-som-mark">${e}</mark>`);
+    });
+    return html;
+  }
+
+  function addSomCard(r, i) {
+    const d = ApsSom.def(r.id);
+    const box = panelEl.querySelector('.aps-av-msgs');
+    const el = document.createElement('div');
+    el.className = 'aps-som-card';
+    el.style.setProperty('--c', ApsSom.colorOf(r.id));
+    el.style.setProperty('--cbg', ApsSom.colorOf(r.id, 0.10));
+    el.innerHTML = `
+      <div class="aps-som-head"><span class="aps-som-no">${'①②③'[i] || ''}</span><b>${esc(d.name)}</b><span class="aps-som-sword">── ${esc(d.sword)}</span><span class="aps-som-grp">${esc(d.group.name)}</span></div>
+      <div class="aps-som-reply">${markUsed(r.reply, r.used)}</div>
+      <div class="aps-som-heart"><span>相手にはこう届く</span>${esc(r.heart || d.heart)}</div>
+      <details class="aps-som-more"><summary>くわしく</summary>
+        <div><span>なぜ効くか</span>${esc(r.why || d.idea)}</div>
+        <div><span>日常の型</span>${esc(r.pattern || d.pattern)}</div>
+        <div><span>こんな時に</span>${esc(r.when || d.when)}</div>
+        <div><span>剣の考え方</span>${esc(d.idea)}</div>
+      </details>
+      ${r.template ? '<div class="aps-som-tmpl">型の見本</div>' : ''}`;
+    box.appendChild(el);
+    box.scrollTop = box.scrollHeight;
+  }
+
+  // ② 試させる：剣を1つ選ぶ
+  function somPickChoices(prefix) {
+    const som = state.som;
+    const choices = panelEl.querySelector('.aps-av-choices');
+    choices.innerHTML = '';
+    if (prefix) {
+      const lab = document.createElement('span');
+      lab.className = 'aps-som-choicelabel'; lab.textContent = prefix;
+      choices.appendChild(lab);
+    }
+    som.ids.forEach((id, i) => {
+      const d = ApsSom.def(id);
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'aps-som-pick' + (som.pick === id ? ' on' : '');
+      b.style.setProperty('--c', ApsSom.colorOf(id));
+      b.textContent = `${'①②③'[i]} ${d.name}で返す`;
+      b.addEventListener('click', () => somChoose(id));
+      choices.appendChild(b);
+    });
+    somTailLinks(choices);
+  }
+
+  function somTailLinks(choices) {
+    if (state.candidates.length > 1) {
+      const other = document.createElement('button');
+      other.type = 'button'; other.className = 'aps-av-link'; other.textContent = 'ほかの言葉で、次の3つ';
+      other.addEventListener('click', () => { state.candIdx = nextCandidateIdx(); renderOpening(); });
+      choices.appendChild(other);
+    }
+    const today = document.createElement('button');
+    today.type = 'button'; today.className = 'aps-av-link'; today.textContent = '今日聞いた言葉で稽古する';
+    today.addEventListener('click', somAskForQuote);
+    choices.appendChild(today);
+    const later = document.createElement('button');
+    later.type = 'button'; later.className = 'aps-av-link'; later.textContent = '今日はここまで';
+    later.addEventListener('click', closePanel);
+    choices.appendChild(later);
+  }
+
+  function somChoose(id) {
+    const som = state.som;
+    som.pick = id;
+    const d = ApsSom.def(id);
+    const r = som.replies.find(x => x.id === id);
+    somPickChoices();
+    addMsg('sys', `「${esc(d.name)}（${esc(d.sword)}）」で返します。日常の型：${esc((r && r.pattern) || d.pattern)}`);
+    const ta = panelTextarea();
+    if (ta) { ta.placeholder = `「${d.name}」で、この言葉に返してみる（お手本をなぞってもOK）`; ta.focus(); }
+  }
+
+  // ② の送信 → ③ 即時フィードバック
+  async function somOnSend() {
+    const som = state.som;
+    const ta = panelTextarea();
+    const text = ta.value.trim();
+    if (!text) return;
+    if (som && som.awaitQuote) {
+      // 今日聞いた言葉を、反論として受け取る
+      ta.value = '';
+      if (ApsSom.isUnsafe(text)) { somUnsafe(); return; }
+      som.quote = text.replace(/^[「『"]|[」』"]$/g, '').trim();
+      som.awaitQuote = false;
+      panelEl.querySelector('.aps-av-msgs').innerHTML = '';
+      addMsg('ai', `今日聞いた言葉です。<div class="aps-av-quote">${esc(som.quote)}</div>もし誰かにこう言われたら、あなたならどう返しますか。<br>まず、3つの剣での返し方を見てみましょう。`);
+      state.history = `[${aiName()}]: 今日聞いた言葉「${som.quote}」（反論対処の稽古）\n`;
+      state.ctx = { date: '今日聞いた言葉', quote: som.quote, ask: '反論対処の稽古' };
+      state.turns = 0; state.savedTurns = 0; state.savedLen = 0;
+      refreshSaveBtn();
+      ta.placeholder = SOM_PLACEHOLDER;
+      somShowExamples();
+      return;
+    }
+    if (!som || !som.ids.length) return;
+    if (!som.pick) { addMsg('sys', '先に、返す剣を1つ選んでください（下のボタン）。'); return; }
+    const d = ApsSom.def(som.pick);
+    ta.value = '';
+    addMsg('user', esc(text));
+    state.history += `[${userName()}]（${d.name}で返す）: ${text}\n`;
+    ApsSom.bump(som.pick, 'tried');
+    const s = settings();
+    if (!s.gasUrl) {
+      addMsg('sys', '即時フィードバックには、スプレッドシートとの連携が必要です。いまは、お手本と見比べて、相手の言葉を使えているか、相手が自分で選べる余白を残せているかを確かめてみましょう。');
+      somPickChoices('もう一度、または別の剣で：');
+      return;
+    }
+    const typing = addMsg('sys', 'あなたの返しを見ています…');
+    state.busy = true;
+    const sendBtn = panelEl.querySelector('.aps-av-send');
+    if (sendBtn) sendBtn.disabled = true;
+    try {
+      const res = await fetch(s.gasUrl, {
+        method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: apsGasPostBody({ type: 'som_feedback', quote: som.quote, id: som.pick, attempt: text, userName: userName() }),
+      });
+      const data = await res.json();
+      typing.remove();
+      if (apsIsUnauthorized(data)) { addMsg('sys', APS_UNAUTHORIZED_MESSAGE); return; }
+      if (data && data.status === 'unsafe') { somUnsafe(); return; }
+      if (!data || data.status !== 'success') {
+        addMsg('sys', 'ごめんなさい、今回はフィードバックを作れませんでした。もう一度送ってみてください。' + (data && data.message ? '（' + esc(data.message) + '）' : ''));
+        return;
+      }
+      addSomFeedback(data);
+      ApsSom.bump(som.pick, data.verdict);
+      state.history += `[${aiName()}]（判定：${data.verdict}）: ${data.weak_point} 修正版：${data.fixed}\n`;
+      state.turns += 1;
+      somPickChoices('書き直して送る、または別の剣で：');
+    } catch (err) {
+      typing.remove();
+      addMsg('sys', '通信エラーが発生しました。接続を確認して、もう一度送ってください。');
+    } finally {
+      state.busy = false;
+      if (sendBtn) sendBtn.disabled = false;
+      refreshSaveBtn();
+    }
+  }
+
+  const VERDICT = {
+    strong: { label: '強い', cls: 'strong' },
+    close: { label: '惜しい', cls: 'close' },
+    weak: { label: '弱い', cls: 'weak' },
+  };
+  function addSomFeedback(f) {
+    const v = VERDICT[f.verdict] || VERDICT.close;
+    const box = panelEl.querySelector('.aps-av-msgs');
+    const el = document.createElement('div');
+    el.className = 'aps-som-fb ' + v.cls;
+    el.innerHTML = `
+      <div class="aps-som-verdict">${v.label}</div>
+      ${f.weak_point ? `<div class="aps-som-weak">${esc(f.weak_point)}</div>` : ''}
+      <div class="aps-som-fixlabel">こう使うと、相手に気づきを渡せる！</div>
+      <div class="aps-som-fixed">${markUsed(f.fixed, f.used)}</div>
+      ${f.why_fixed ? `<div class="aps-som-why">${esc(f.why_fixed)}</div>` : ''}
+      ${f.good ? `<div class="aps-som-good">良いところ：${esc(f.good)}</div>` : ''}
+      ${f.next ? `<div class="aps-som-next">${esc(f.next)}</div>` : ''}`;
+    box.appendChild(el);
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function somUnsafe() {
+    state.som = null;
+    addMsg('ai', 'この言葉は、反論として返すものではなく、まず大切に受け止めたい言葉です。ここで技を使うのはやめておきますね。<br>よければ、菅ちゃんと話してみてください。');
+    const choices = panelEl.querySelector('.aps-av-choices');
+    choices.innerHTML = '';
+    const a = document.createElement('a');
+    a.className = 'aps-av-pill'; a.href = 'https://rikkis-room.com/ja/briefing'; a.target = '_blank'; a.rel = 'noopener';
+    a.textContent = '菅ちゃんとのセッションを見る';
+    choices.appendChild(a);
+    somTailLinks(choices);
+  }
+
+  function injectSomStyle() {
+    if (document.getElementById('aps-som-style')) return;
+    const st = document.createElement('style');
+    st.id = 'aps-som-style';
+    st.textContent = `
+.aps-av-somtg{margin-left:auto;border:1px solid rgba(148,163,184,.45);background:none;color:#cbd5e1;border-radius:999px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap}
+.aps-av-somtg.on{background:#e2e8f0;color:#0a0f1e;border-color:#e2e8f0;box-shadow:0 0 14px rgba(226,232,240,.35)}
+.aps-av-somtg + .aps-av-x{margin-left:6px}
+.aps-som-shelf{display:none;align-items:center;gap:8px;padding:8px 2px 10px;font-size:10px;color:#94a3b8}
+.aps-som-dots{display:flex;gap:4px;flex-wrap:wrap}
+.aps-som-dot{width:9px;height:9px;border-radius:50%;border:1px solid var(--c);opacity:.35;display:inline-block}
+.aps-som-dot.lit{background:var(--c);opacity:1;box-shadow:0 0 6px var(--c)}
+.aps-som-shelf-count{margin-left:auto;white-space:nowrap}
+.aps-som-card{align-self:stretch;border:1px solid var(--c);background:var(--cbg);border-radius:14px;padding:10px 14px;font-size:14px;line-height:1.75;color:#e2e8f0;position:relative}
+.aps-som-head{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;font-size:12px;color:var(--c);margin-bottom:4px}
+.aps-som-head b{font-size:14px}
+.aps-som-sword{color:#94a3b8}
+.aps-som-grp{margin-left:auto;font-size:10px;color:#94a3b8;border:1px solid rgba(148,163,184,.35);border-radius:999px;padding:1px 8px}
+.aps-som-reply{font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-size:15.5px;line-height:1.9;color:#f8f1dc;white-space:pre-wrap}
+.aps-som-mark{background:none;color:inherit;border-bottom:2px solid var(--c,#f59e0b);padding:0 1px}
+.aps-som-heart{margin-top:6px;font-size:12.5px;color:#cbd5e1;line-height:1.7}
+.aps-som-heart span,.aps-som-more span{display:inline-block;font-size:10.5px;color:var(--c);border:1px solid var(--c);border-radius:999px;padding:0 8px;margin-right:6px}
+.aps-som-more{margin-top:6px;font-size:12.5px;color:#cbd5e1}
+.aps-som-more summary{cursor:pointer;color:#94a3b8;font-size:11.5px}
+.aps-som-more div{margin-top:5px;line-height:1.7}
+.aps-som-tmpl{position:absolute;top:8px;right:12px;font-size:10px;color:#94a3b8}
+.aps-som-card .aps-som-tmpl + *{}
+.aps-som-pick{border:1px solid var(--c);background:none;color:var(--c);border-radius:999px;padding:7px 14px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit}
+.aps-som-pick.on{background:var(--c);color:#0a0f1e}
+.aps-som-choicelabel{font-size:11.5px;color:#94a3b8;width:100%}
+.aps-som-fb{align-self:stretch;border-radius:14px;padding:12px 14px;font-size:14px;line-height:1.75;border:1px solid}
+.aps-som-fb.strong{border-color:rgba(52,211,153,.6);background:rgba(52,211,153,.08)}
+.aps-som-fb.close{border-color:rgba(251,191,36,.6);background:rgba(251,191,36,.08)}
+.aps-som-fb.weak{border-color:rgba(248,113,113,.65);background:rgba(248,113,113,.08)}
+.aps-som-verdict{display:inline-block;font-weight:800;font-size:13px;border-radius:999px;padding:1px 12px;margin-bottom:6px;color:#0a0f1e}
+.aps-som-fb.strong .aps-som-verdict{background:#34d399}
+.aps-som-fb.close .aps-som-verdict{background:#fbbf24}
+.aps-som-fb.weak .aps-som-verdict{background:#f87171}
+.aps-som-weak{font-weight:700;color:#f8fafc}
+.aps-som-fixlabel{margin-top:8px;font-size:11.5px;color:#94a3b8}
+.aps-som-fixed{font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-size:15.5px;line-height:1.9;color:#f8f1dc;border-left:2px solid #f59e0b;padding-left:12px;margin:2px 0 4px}
+.aps-som-fixed .aps-som-mark{border-bottom-color:#f59e0b}
+.aps-som-why,.aps-som-good,.aps-som-next{font-size:12.5px;color:#cbd5e1;margin-top:4px}
+.aps-som-next{color:#ffd97a}
+.aps-av-sheet.aps-som-on .aps-av-dot{border-color:#e2e8f0}`;
+    document.head.appendChild(st);
   }
 
   function boot() {
