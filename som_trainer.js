@@ -95,10 +95,11 @@
     if (!d) return null;
     return { id, g: d[0], group: GROUPS[d[0]], name: d[1], sword: d[2], idea: d[3], tmpl: d[4], heart: d[5], pattern: d[6], when: d[7], no: IDS.indexOf(id) + 1 };
   }
-  function colorOf(id, alpha) {
+  // lc：明度と彩度（省略時は黒い背景向けの '0.80 0.11'。明るい背景では '0.48 0.13' を使う）
+  function colorOf(id, alpha, lc) {
     const d = DEFS[id];
     const hue = d ? GROUPS[d[0]].hue : 40;
-    return `oklch(0.80 0.11 ${hue}${alpha != null ? ' / ' + alpha : ''})`;
+    return `oklch(${lc || '0.80 0.11'} ${hue}${alpha != null ? ' / ' + alpha : ''})`;
   }
 
   // AI が無い時の見本。本人の言葉が長すぎる時は、最初の一文（最大40字）を使う。

@@ -33,6 +33,12 @@
 //   教え方の3段：①やってみせる（画面の言葉に、3つの剣で3通りの返し）→ ②試させる（剣を1つ選んで、自分の返しを書く）
 //   → ③即時フィードバック（忖度しない。強い／惜しい／弱い＋修正版）。AI は GAS 経由の Claude Sonnet 5.5（I_SOM.js）。
 //   16技法の山札・端末の記録は som_trainer.js。モードを切ると v1.7 と同じ体験に戻る。
+// v2.1 (2026-11-12): 反論対処モードを「全画面のページ」に（オーナー実機フィードバック：ポップアップがおまけに見え、没入できない）。
+//   依頼書：RIKKIS ROOM/Projects/反論対処トレーニング_画面改善依頼書_2026-11-12.md
+//   ①モードを押すと、パネルが全画面の読み物ページに切り替わる ②文字は、しっぽり明朝
+//   ③背景は 6:00〜18:00 が明るい紙、それ以外は Genesis Pipe の黒。右上の小さなボタンで、その日だけ手動で切り替えられる
+//   ④左上に大きな「戻る」（端末の戻る操作でも戻れる）。戻ると、モードがオフの浮遊パネル（v1.7）に帰る
+//   ⑤3つの返しは、1つずつ見せる（①②③の印と「次の返しへ」で進む）。3つ目を見たら、稽古に進める。
 (function () {
   const FLAG_KEY = 'aps_reflection_enabled'; // 振り返り機能と共通の有効化キー（v1.5で統合）
   const AUTO_OPEN_KEY = 'aps_avatar_auto_open_date'; // 1日1回だけ自動で開くための実施日
@@ -599,9 +605,11 @@
     panelEl.innerHTML = `
       <div class="aps-av-sheet">
         <div class="aps-av-head">
+          <button type="button" class="aps-som-back" aria-label="戻る（反論対処モードを終えて、いつもの対話へ）">‹ 戻る</button>
           <div class="aps-av-dot" style="font-size:${nameFontSize(name)}">${esc(name)}</div>
           <div><div class="aps-av-title">${esc(name)}</div><div class="aps-av-sub">過去のあなたの言葉から</div></div>
           ${window.ApsSom ? '<button type="button" class="aps-av-somtg" aria-pressed="false">反論対処モード</button>' : ''}
+          <button type="button" class="aps-som-theme"></button>
           <button type="button" class="aps-av-x" aria-label="閉じる">×</button>
         </div>
         <div class="aps-som-shelf"></div>
@@ -626,6 +634,8 @@
     panelEl.querySelector('.aps-av-mic').addEventListener('click', toggleAvatarRecording);
     const somTg = panelEl.querySelector('.aps-av-somtg');
     if (somTg) somTg.addEventListener('click', toggleSomMode);
+    panelEl.querySelector('.aps-som-back').addEventListener('click', somBack);
+    panelEl.querySelector('.aps-som-theme').addEventListener('click', somToggleTheme);
     injectSomStyle();
     refreshSomChrome();
     setupAvatarMic();
@@ -677,6 +687,8 @@
 
   function closePanel() {
     stopAvatarRecording();
+    clearInterval(somThemeTimer); somThemeTimer = null;
+    if (somPushed) { somPushed = false; try { history.back(); } catch (err) { /* 履歴が無ければそのまま */ } } // 積んだ履歴を片付ける
     state.open = false;
     if (panelEl) { panelEl.remove(); panelEl = null; }
   }
@@ -811,10 +823,72 @@
     const sub = panelEl.querySelector('.aps-av-sub');
     if (sub) sub.textContent = on ? '反論対処の稽古' : '過去のあなたの言葉から';
     panelEl.querySelector('.aps-av-sheet').classList.toggle('aps-som-on', on);
+    // v2.1：オンの間は、パネル全体を全画面の読み物ページにする。オフなら v1.7 の浮遊パネルのまま。
+    panelEl.classList.toggle('aps-som-page', on);
+    panelEl.classList.remove('aps-av-auto');
+    clearInterval(somThemeTimer); somThemeTimer = null;
+    if (on) {
+      applySomTheme();
+      somThemeTimer = setInterval(applySomTheme, 60000); // 開いたまま 6時・18時をまたいでも切り替わる
+    } else {
+      delete panelEl.dataset.theme;
+    }
     const ta = panelTextarea();
     if (ta) ta.placeholder = on ? SOM_PLACEHOLDER : DEFAULT_PLACEHOLDER;
     renderSomShelf();
   }
+
+  // ── 朝と夜（v2.1）：6:00〜18:00 は明るい紙、それ以外は Genesis Pipe の黒。
+  //    手動の切り替えはその日だけ有効（翌日は時刻どおりに戻る）。 ──
+  const SOM_THEME_KEY = 'aps_som_theme_override'; // { date: 'YYYY-MM-DD', theme: 'day'|'night' }
+  let somThemeTimer = null;
+  function somAutoTheme() { const h = new Date().getHours(); return h >= 6 && h < 18 ? 'day' : 'night'; }
+  function somTheme() {
+    try {
+      const o = JSON.parse(localStorage.getItem(SOM_THEME_KEY) || 'null');
+      if (o && o.date === localToday() && (o.theme === 'day' || o.theme === 'night')) return o.theme;
+    } catch (err) { /* 読めなければ時刻どおり */ }
+    return somAutoTheme();
+  }
+  function applySomTheme() {
+    if (!panelEl) return;
+    const t = somTheme();
+    panelEl.dataset.theme = t;
+    const b = panelEl.querySelector('.aps-som-theme');
+    if (b) {
+      b.textContent = t === 'day' ? '☾ 黒い画面に' : '☀ 明るい画面に';
+      b.setAttribute('aria-label', t === 'day' ? '今日は黒い背景にする' : '今日は明るい背景にする');
+    }
+  }
+  function somToggleTheme() {
+    const next = somTheme() === 'day' ? 'night' : 'day';
+    try {
+      if (next === somAutoTheme()) localStorage.removeItem(SOM_THEME_KEY); // 時刻どおりに戻ったなら、覚えておく必要はない
+      else localStorage.setItem(SOM_THEME_KEY, JSON.stringify({ date: localToday(), theme: next }));
+    } catch (err) { /* 保存できなくても、この画面では切り替える */ }
+    applySomTheme();
+  }
+
+  // ── 戻る（v2.1）：いつも左上。押すと、モードをオフにして、いつもの浮遊パネルへ帰る。
+  //    ページに入る時に履歴を1つ積むので、端末の「戻る」操作でも同じように帰れる。 ──
+  let somPushed = false;
+  function somBack() {
+    if (somPushed) { history.back(); return; } // popstate で somExit が走る
+    somExit();
+  }
+  function somExit() {
+    somPushed = false;
+    if (!window.ApsSom || !ApsSom.isOn()) return;
+    stopAvatarRecording();
+    ApsSom.setOn(false);
+    state.som = null;
+    refreshSomChrome();
+    renderOpening(); // 同じ言葉のまま、いつもの対話に戻る
+  }
+  window.addEventListener('popstate', () => {
+    if (somPushed && state.open && somActive()) somExit();
+    else somPushed = false;
+  });
 
   // 剣の棚：この巡で見た剣が灯る（16の印、5つの群の色）
   function renderSomShelf() {
@@ -826,15 +900,26 @@
     const dots = ApsSom.IDS.map(id => {
       const d = ApsSom.def(id);
       const lit = seen.includes(id);
-      return `<i class="aps-som-dot${lit ? ' lit' : ''}" style="--c:${ApsSom.colorOf(id)}" title="${esc(d.no + '. ' + d.name + '（' + d.sword + '）')}"></i>`;
+      return `<i class="aps-som-dot${lit ? ' lit' : ''}" style="${somColorVars(id)}" title="${esc(d.no + '. ' + d.name + '（' + d.sword + '）')}"></i>`;
     }).join('');
     box.style.display = 'flex';
     box.innerHTML = `<span class="aps-som-shelf-label">剣の棚</span><span class="aps-som-dots">${dots}</span><span class="aps-som-shelf-count">第${deck.round}巡 ${seen.length}/16</span>`;
   }
 
+  // 群の色：黒い背景用（--cn）と明るい背景用（--cd、文字が読める濃さ）の両方を渡し、CSS 側でテーマに合わせて選ぶ
+  function somColorVars(id) {
+    return `--cn:${ApsSom.colorOf(id)};--cd:${ApsSom.colorOf(id, null, '0.48 0.13')};` +
+      `--cbgn:${ApsSom.colorOf(id, 0.10)};--cbgd:${ApsSom.colorOf(id, 0.07, '0.55 0.12')}`;
+  }
+
   function toggleSomMode() {
     if (!window.ApsSom) return;
-    ApsSom.setOn(!ApsSom.isOn());
+    const turningOn = !ApsSom.isOn();
+    if (!turningOn && somPushed) { history.back(); return; } // 戻ると同じ道で帰る
+    ApsSom.setOn(turningOn);
+    if (turningOn) {
+      try { history.pushState({ apsSomPage: 1 }, ''); somPushed = true; } catch (err) { somPushed = false; }
+    }
     state.som = null;
     refreshSomChrome();
     renderOpening(); // 同じ言葉のまま、モードだけ切り替える
@@ -903,11 +988,58 @@
       return r || ApsSom.templateFor(id, som.quote);
     });
     if (note) addMsg('sys', esc(note));
-    som.replies.forEach((r, i) => { addSomCard(r, i); ApsSom.bump(r.id, 'shown'); });
     state.history += som.replies.map(r => { const d = ApsSom.def(r.id); return `[${aiName()}]（${d.name}・${d.sword}）: ${r.reply}`; }).join('\n') + '\n';
-    if (draw.roundDone) addMsg('sys', '16の剣を、ひと通り見ました。ここから新しい巡です。');
-    addMsg('ai', '同じ言葉でも、返し方は一つではありません。どれも、相手を責めずに、前に進む力を信じている返しです。<br><b>では、あなたの番です。</b>3つの剣から1つ選んで、同じ言葉に、自分の言葉で返してみてください。');
-    somPickChoices();
+    // v2.1：3つの返しは、1つずつ見せる。3つ目まで見たら、稽古（剣を選んで返す）に進める。
+    somShowDeck(som, () => {
+      if (draw.roundDone) addMsg('sys', '16の剣を、ひと通り見ました。ここから新しい巡です。');
+      addMsg('ai', '同じ言葉でも、返し方は一つではありません。どれも、相手を責めずに、前に進む力を信じている返しです。<br><b>では、あなたの番です。</b>3つの剣から1つ選んで、同じ言葉に、自分の言葉で返してみてください。');
+      somPickChoices();
+    });
+  }
+
+  // 3枚を1つの場所に重ね、1枚ずつ見せる。①②③の印で行き来でき、「次の返しへ」で進む。
+  function somShowDeck(som, onAllSeen) {
+    const box = panelEl.querySelector('.aps-av-msgs');
+    const deck = document.createElement('div');
+    deck.className = 'aps-som-deck3';
+    const cards = som.replies.map((r, i) => { const el = buildSomCard(r, i); deck.appendChild(el); return el; });
+    const nav = document.createElement('div');
+    nav.className = 'aps-som-nav';
+    const tabs = som.replies.map((r, i) => {
+      const t = document.createElement('button');
+      t.type = 'button'; t.className = 'aps-som-tab'; t.setAttribute('style', somColorVars(r.id));
+      t.textContent = '①②③'[i]; t.setAttribute('aria-label', `${i + 1}つ目の返し`);
+      t.addEventListener('click', () => show(i));
+      nav.appendChild(t);
+      return t;
+    });
+    const next = document.createElement('button');
+    next.type = 'button'; next.className = 'aps-som-next-btn';
+    next.addEventListener('click', () => show(som.view + 1));
+    nav.appendChild(next);
+    deck.appendChild(nav);
+    box.appendChild(deck);
+    const seen = new Set();
+    let done = false;
+    function show(i) {
+      if (i < 0 || i >= cards.length) return;
+      som.view = i;
+      cards.forEach((c, k) => c.classList.toggle('show', k === i));
+      tabs.forEach((t, k) => { t.classList.toggle('on', k === i); t.setAttribute('aria-pressed', k === i ? 'true' : 'false'); });
+      if (!seen.has(i)) { seen.add(i); ApsSom.bump(som.replies[i].id, 'shown'); }
+      const last = i >= cards.length - 1;
+      next.style.display = last ? 'none' : '';
+      next.textContent = `次の返しへ（${i + 2}/${cards.length}）→`;
+      if (seen.size === cards.length && !done) {
+        done = true;
+        onAllSeen();
+      } else if (!done) {
+        somTailLinks(panelEl.querySelector('.aps-av-choices'), true);
+      }
+      deck.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }
+    som.showCard = show;
+    show(0);
   }
 
   function markUsed(text, used) {
@@ -919,13 +1051,11 @@
     return html;
   }
 
-  function addSomCard(r, i) {
+  function buildSomCard(r, i) {
     const d = ApsSom.def(r.id);
-    const box = panelEl.querySelector('.aps-av-msgs');
     const el = document.createElement('div');
     el.className = 'aps-som-card';
-    el.style.setProperty('--c', ApsSom.colorOf(r.id));
-    el.style.setProperty('--cbg', ApsSom.colorOf(r.id, 0.10));
+    el.setAttribute('style', somColorVars(r.id));
     el.innerHTML = `
       <div class="aps-som-head"><span class="aps-som-no">${'①②③'[i] || ''}</span><b>${esc(d.name)}</b><span class="aps-som-sword">── ${esc(d.sword)}</span><span class="aps-som-grp">${esc(d.group.name)}</span></div>
       <div class="aps-som-reply">${markUsed(r.reply, r.used)}</div>
@@ -937,8 +1067,7 @@
         <div><span>剣の考え方</span>${esc(d.idea)}</div>
       </details>
       ${r.template ? '<div class="aps-som-tmpl">型の見本</div>' : ''}`;
-    box.appendChild(el);
-    box.scrollTop = box.scrollHeight;
+    return el;
   }
 
   // ② 試させる：剣を1つ選ぶ
@@ -955,7 +1084,7 @@
       const d = ApsSom.def(id);
       const b = document.createElement('button');
       b.type = 'button'; b.className = 'aps-som-pick' + (som.pick === id ? ' on' : '');
-      b.style.setProperty('--c', ApsSom.colorOf(id));
+      b.setAttribute('style', somColorVars(id));
       b.textContent = `${'①②③'[i]} ${d.name}で返す`;
       b.addEventListener('click', () => somChoose(id));
       choices.appendChild(b);
@@ -963,7 +1092,8 @@
     somTailLinks(choices);
   }
 
-  function somTailLinks(choices) {
+  function somTailLinks(choices, fresh) {
+    if (fresh) choices.innerHTML = '';
     if (state.candidates.length > 1) {
       const other = document.createElement('button');
       other.type = 'button'; other.className = 'aps-av-link'; other.textContent = 'ほかの言葉で、次の3つ';
@@ -985,6 +1115,7 @@
     som.pick = id;
     const d = ApsSom.def(id);
     const r = som.replies.find(x => x.id === id);
+    if (som.showCard) som.showCard(som.ids.indexOf(id)); // 選んだ剣のお手本を、見える場所に出す
     somPickChoices();
     addMsg('sys', `「${esc(d.name)}（${esc(d.sword)}）」で返します。日常の型：${esc((r && r.pattern) || d.pattern)}`);
     const ta = panelTextarea();
@@ -1099,7 +1230,7 @@
     st.textContent = `
 .aps-av-somtg{margin-left:auto;border:1px solid rgba(148,163,184,.45);background:none;color:#cbd5e1;border-radius:999px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap}
 .aps-av-somtg.on{background:#e2e8f0;color:#0a0f1e;border-color:#e2e8f0;box-shadow:0 0 14px rgba(226,232,240,.35)}
-.aps-av-somtg + .aps-av-x{margin-left:6px}
+.aps-av-somtg ~ .aps-av-x{margin-left:6px}
 .aps-som-shelf{display:none;align-items:center;gap:8px;padding:8px 2px 10px;font-size:10px;color:#94a3b8}
 .aps-som-dots{display:flex;gap:4px;flex-wrap:wrap}
 .aps-som-dot{width:9px;height:9px;border-radius:50%;border:1px solid var(--c);opacity:.35;display:inline-block}
@@ -1136,7 +1267,116 @@
 .aps-som-fixed .aps-som-mark{border-bottom-color:#f59e0b}
 .aps-som-why,.aps-som-good,.aps-som-next{font-size:12.5px;color:#cbd5e1;margin-top:4px}
 .aps-som-next{color:#ffd97a}
-.aps-av-sheet.aps-som-on .aps-av-dot{border-color:#e2e8f0}`;
+.aps-av-sheet.aps-som-on .aps-av-dot{border-color:#e2e8f0}
+.aps-som-card,.aps-som-pick,.aps-som-dot,.aps-som-tab{--c:var(--cn);--cbg:var(--cbgn)}
+.aps-som-back,.aps-som-theme{display:none}
+
+/* ── v2.1 全画面の読み物ページ ── */
+.aps-av-panel.aps-som-page{
+  --bg:#0a0f1e;--ink:#ece6d8;--ink2:#c9c3b6;--muted:#8f96a3;--line:rgba(255,255,255,.12);--surface:rgba(255,255,255,.035);
+  --accent:#f59e0b;--accent-ink:#ffd97a;--on-accent:#0a0f1e;--quote:#f1e9d2;--reply:#f8f1dc;
+  align-items:stretch;justify-content:stretch;padding:0;background:var(--bg);color:var(--ink);
+  -webkit-backdrop-filter:none;backdrop-filter:none;
+  font-family:'Shippori Mincho','Hiragino Mincho ProN','Yu Mincho',serif;font-weight:500;
+  transition:background-color .4s ease,color .4s ease}
+.aps-av-panel.aps-som-page[data-theme="day"]{
+  --bg:#f7f3ea;--ink:#2a2620;--ink2:#4a443b;--muted:#6f675b;--line:rgba(70,52,24,.16);--surface:#fffdf8;
+  --accent:#b45309;--accent-ink:#92400e;--on-accent:#fffdf8;--quote:#3a2f1e;--reply:#211d18}
+.aps-som-page[data-theme="day"] .aps-som-card,.aps-som-page[data-theme="day"] .aps-som-pick,
+.aps-som-page[data-theme="day"] .aps-som-dot,.aps-som-page[data-theme="day"] .aps-som-tab{--c:var(--cd);--cbg:var(--cbgd)}
+.aps-som-page button,.aps-som-page textarea{font-family:inherit}
+@media (prefers-reduced-motion:no-preference){.aps-som-page .aps-av-sheet{animation:apsSomEnter .45s ease}}
+@keyframes apsSomEnter{from{opacity:0}to{opacity:1}}
+.aps-av-panel.aps-som-page .aps-av-sheet{width:100%;max-width:none;height:100%;max-height:none;margin:0;border:0;border-radius:0;
+  background:var(--bg);box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none;
+  padding:0 0 calc(12px + env(safe-area-inset-bottom,0px))}
+/* 上の帯：左上に「戻る」、真ん中に題、右上に朝夜の切り替え。いつも同じ場所。 */
+.aps-som-page .aps-av-head{position:relative;justify-content:center;min-height:64px;box-sizing:border-box;
+  padding:calc(10px + env(safe-area-inset-top,0px)) 16px 10px;border-bottom:1px solid var(--line)}
+.aps-som-page .aps-av-dot,.aps-som-page .aps-av-somtg,.aps-som-page .aps-av-x{display:none}
+.aps-som-page .aps-av-head > div:not(.aps-av-dot){text-align:center}
+.aps-som-page .aps-av-title{color:var(--muted);font-size:12px;font-weight:500;letter-spacing:.08em}
+.aps-som-page .aps-av-sub{color:var(--ink);font-size:16px;font-weight:700;letter-spacing:.12em}
+.aps-som-page .aps-som-back{display:inline-flex;align-items:center;position:absolute;left:max(12px,env(safe-area-inset-left,0px));
+  top:calc(10px + env(safe-area-inset-top,0px));min-height:44px;padding:0 20px;border-radius:999px;cursor:pointer;
+  font-size:16px;font-weight:700;letter-spacing:.06em;color:var(--on-accent);background:var(--accent);border:0;
+  box-shadow:0 2px 10px rgba(0,0,0,.18)}
+.aps-som-page .aps-som-back:focus-visible,.aps-som-page .aps-som-theme:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.aps-som-page .aps-som-theme{display:inline-block;position:absolute;right:max(12px,env(safe-area-inset-right,0px));
+  top:calc(18px + env(safe-area-inset-top,0px));background:none;border:1px solid var(--line);color:var(--muted);
+  border-radius:999px;padding:5px 12px;font-size:11.5px;cursor:pointer}
+@media (max-width:520px){
+  .aps-som-page .aps-av-head{justify-content:flex-end;padding-right:16px;padding-left:120px}
+  .aps-som-page .aps-av-head > div:not(.aps-av-dot){text-align:right;margin-right:auto;margin-left:0}
+  .aps-som-page .aps-av-title{display:none}
+  .aps-som-page .aps-av-sub{font-size:14px;letter-spacing:.06em}
+  .aps-som-page .aps-som-theme{position:static;margin-left:8px;padding:5px 10px}
+}
+/* 本文の柱：読み物の幅で中央に */
+.aps-som-page .aps-som-shelf,.aps-som-page .aps-av-msgs,.aps-som-page .aps-av-choices,.aps-som-page .aps-av-input,
+.aps-som-page .aps-av-saverow,.aps-som-page .aps-av-note{width:100%;max-width:680px;margin-left:auto;margin-right:auto;box-sizing:border-box;padding-left:20px;padding-right:20px}
+.aps-som-page .aps-som-shelf{padding-top:14px;color:var(--muted);font-size:11px}
+.aps-som-page .aps-av-msgs{flex:1;min-height:0;background:none;border:0;border-radius:0;gap:22px;padding-top:18px;padding-bottom:24px}
+.aps-som-page .aps-av-msg{max-width:100%;font-size:17px;line-height:2.05}
+.aps-som-page .aps-av-msg.ai{background:none;border:0;padding:0;color:var(--ink)}
+.aps-som-page .aps-av-msg.user{background:var(--surface);border:1px solid var(--line);color:var(--ink);padding:12px 18px;max-width:92%}
+.aps-som-page .aps-av-msg.sys{color:var(--muted);font-size:13px;line-height:1.9}
+.aps-som-page .aps-av-quote{font-size:21px;line-height:2;color:var(--quote);border-left-color:var(--accent);padding-left:16px;margin:14px 0 10px}
+/* 1つずつ見せる返し */
+.aps-som-deck3{align-self:stretch;display:flex;flex-direction:column;gap:16px;scroll-margin-top:12px}
+.aps-som-deck3 .aps-som-card{display:none}
+.aps-som-deck3 .aps-som-card.show{display:block}
+@media (prefers-reduced-motion:no-preference){.aps-som-deck3 .aps-som-card.show{animation:apsSomCardIn .5s ease}}
+@keyframes apsSomCardIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.aps-som-nav{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap}
+.aps-som-tab{width:40px;height:40px;border-radius:50%;border:1.5px solid var(--c);background:none;color:var(--c);font-size:17px;cursor:pointer;padding:0;opacity:.55}
+.aps-som-tab.on{background:var(--c);color:var(--bg,#0a0f1e);opacity:1}
+.aps-som-next-btn{margin-left:8px;min-height:44px;border-radius:999px;border:1.5px solid var(--accent,#f59e0b);background:none;
+  color:var(--accent-ink,#ffd97a);font-size:15px;font-weight:700;padding:0 22px;cursor:pointer;letter-spacing:.04em}
+.aps-som-page .aps-som-card{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--c);border-radius:16px;
+  padding:22px 24px 18px;color:var(--ink);font-size:15px;line-height:1.9}
+.aps-som-page .aps-som-head{font-size:13px;margin-bottom:10px}
+.aps-som-page .aps-som-head b{font-size:17px}
+.aps-som-page .aps-som-sword,.aps-som-page .aps-som-grp,.aps-som-page .aps-som-tmpl{color:var(--muted)}
+.aps-som-page .aps-som-grp{border-color:var(--line)}
+.aps-som-page .aps-som-reply{font-size:21px;line-height:2.1;color:var(--reply)}
+.aps-som-page .aps-som-heart,.aps-som-page .aps-som-more{font-size:14.5px;color:var(--ink2);margin-top:12px;line-height:1.95}
+.aps-som-page .aps-som-more summary{color:var(--muted);font-size:13px}
+/* 稽古とフィードバック */
+.aps-som-page .aps-av-choices{gap:12px;padding-top:6px;padding-bottom:10px}
+.aps-som-page .aps-som-pick{font-size:14.5px;padding:9px 18px}
+.aps-som-page .aps-som-pick.on{color:var(--bg)}
+.aps-som-page .aps-som-choicelabel{color:var(--muted);font-size:13px}
+.aps-som-page .aps-av-link{color:var(--muted);font-size:13.5px}
+.aps-som-page .aps-av-pill{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-size:15px}
+.aps-som-page .aps-som-fb{font-size:15.5px;line-height:1.95;padding:18px 20px;color:var(--ink)}
+.aps-som-page .aps-som-weak{color:var(--ink)}
+.aps-som-page .aps-som-fixed{font-size:19px;line-height:2.05;color:var(--reply);border-left-color:var(--accent)}
+.aps-som-page .aps-som-fixlabel{color:var(--muted);font-size:13px}
+.aps-som-page .aps-som-why,.aps-som-page .aps-som-good{color:var(--ink2);font-size:14.5px}
+.aps-som-page .aps-som-next{color:var(--accent-ink);font-size:14.5px}
+.aps-som-page .aps-av-input{border-top:1px solid var(--line);padding-top:14px}
+.aps-som-page .aps-av-input textarea{background:var(--surface);border-color:var(--line);color:var(--ink);font-size:16px;line-height:1.8}
+.aps-som-page .aps-av-input textarea:focus{border-color:var(--accent)}
+.aps-som-page .aps-av-mic{background:var(--surface);border-color:var(--line);color:var(--accent)}
+.aps-som-page .aps-av-send{background:var(--accent);color:var(--on-accent);font-size:15px}
+.aps-som-page .aps-av-save{background:none;border-color:var(--accent);color:var(--accent-ink)}
+.aps-som-page .aps-av-savestate,.aps-som-page .aps-av-note{color:var(--muted)}
+.aps-som-page .aps-av-note{font-size:11.5px}
+/* 小さな画面：読む場所を広く取る（注意書きは隠し、操作を詰める） */
+@media (max-width:520px){
+  .aps-som-page .aps-som-shelf,.aps-som-page .aps-av-msgs,.aps-som-page .aps-av-choices,.aps-som-page .aps-av-input,
+  .aps-som-page .aps-av-saverow{padding-left:14px;padding-right:14px}
+  .aps-som-page .aps-av-note{display:none}
+  .aps-som-page .aps-som-card{padding:16px 16px 12px}
+  .aps-som-page .aps-som-reply{font-size:19px;line-height:2}
+  .aps-som-page .aps-av-quote{font-size:19px}
+  .aps-som-page .aps-av-msg{font-size:16px;line-height:1.95}
+  .aps-som-page .aps-av-choices{gap:8px}
+  .aps-som-page .aps-som-pick{font-size:13px;padding:7px 12px}
+  .aps-som-page .aps-av-link{font-size:12.5px;padding:2px}
+  .aps-som-page .aps-av-input textarea{font-size:15px}
+}`;
     document.head.appendChild(st);
   }
 
